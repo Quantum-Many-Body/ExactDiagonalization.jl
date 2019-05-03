@@ -1,0 +1,11 @@
+language: julia
+
+os:
+  - linux
+
+julia:
+  - 1.1
+
+after_success:
+  - julia --inline=no -e 'using Pkg; Pkg.add("Coverage"); import ExactDiagonalization; joinpath(dirname(pathof(ExactDiagonalization))); using Coverage; Codecov.submit(Codecov.process_folder())'
+  - julia -e 'using Pkg; Pkg.add("DocumenterTools"); Pkg.add("Documenter"); ENV["DOCUMENTER_DEBUG"] = "true"; import ExactDiagonalization; joinpath(dirname(pathof(ExactDiagonalization))); include(joinpath("docs","make.jl"))'
