@@ -1,7 +1,19 @@
 # This file is machine-generated - editing it directly is not advised
 
+[[Arpack]]
+deps = ["BinaryProvider", "Libdl", "LinearAlgebra", "Random", "SparseArrays", "Test"]
+git-tree-sha1 = "1ce1ce9984683f0b6a587d5bdbc688ecb480096f"
+uuid = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
+version = "0.3.0"
+
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[BinaryProvider]]
+deps = ["Libdl", "SHA"]
+git-tree-sha1 = "c7361ce8a2129f20b0e05a89f7070820cfed6648"
+uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
+version = "0.5.4"
 
 [[CSTParser]]
 deps = ["LibGit2", "Test", "Tokenize"]
@@ -48,6 +60,12 @@ version = "0.3.5"
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[LaTeXStrings]]
+deps = ["Compat"]
+git-tree-sha1 = "7ab9b8788cfab2bdde22adf9004bda7ad9954b6c"
+uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+version = "1.0.3"
 
 [[LibGit2]]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
@@ -96,10 +114,10 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [[QuantumLattices]]
-deps = ["DataStructures", "Formatting", "LinearAlgebra", "MacroTools", "NearestNeighbors", "Printf", "Random", "Reexport", "StaticArrays"]
-git-tree-sha1 = "c7ae85fa4a1321b748e545d23a70ec6c78034a09"
+deps = ["DataStructures", "Formatting", "LaTeXStrings", "LinearAlgebra", "MacroTools", "NearestNeighbors", "Printf", "Random", "Reexport", "StaticArrays"]
+git-tree-sha1 = "b5acdbc4e3fd212d8425e41f9c05aa0c1c788d9a"
 uuid = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
-version = "0.1.0"
+version = "0.1.1"
 
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets"]

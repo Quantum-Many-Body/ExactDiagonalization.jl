@@ -15,6 +15,9 @@ makedocs(
     sitename=   "ExactDiagonalization.jl",
     pages=      [
                 "Home"      =>  "index.md",
+                "Manul"     =>  [
+                    "man/FED.md",
+                    ]
                 ]
 )
 
