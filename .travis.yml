@@ -4,7 +4,7 @@ os:
   - linux
 
 julia:
-  - 1.1
+  - 1.6
 
 after_success:
   - julia --inline=no -e 'using Pkg; Pkg.add("Coverage"); import ExactDiagonalization; joinpath(dirname(pathof(ExactDiagonalization))); using Coverage; Codecov.submit(Codecov.process_folder())'
