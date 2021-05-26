@@ -169,5 +169,4 @@ function SparseMatrixCSC(opts::Operators, basis₁::FockBasis, basis₂::FockBas
     return result
 end
 
-
 end  # module
