@@ -1,9 +1,6 @@
 [deps]
 Arpack = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
 QuantumLattices = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[compat]
-QuantumLattices = "0.2"
-julia = "1.6"
