@@ -148,11 +148,11 @@ end
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
     eigensystem = eigen(matrix(ed); nev=1)
-    @test eigensystem.values ≈ [-2.0]
-    @test eigensystem.vectors ≈ [0.5; -0.5; -0.5; 0.5]
+    @test isapprox(eigensystem.values, [-2.0]; atol=10^-10)
+    @test isapprox(eigensystem.vectors, [0.5; -0.5; -0.5; 0.5]; atol=10^-10)
 
     update!(ed, U=1.0, μ=-0.5)
     eigensystem = eigen(matrix(ed); nev=1)
-    @test eigensystem.values ≈ [-2.5615528128088303]
-    @test eigensystem.vectors ≈ [-0.43516214649359913; 0.5573454101893041; 0.5573454101893037; -0.43516214649359913]
+    @test isapprox(eigensystem.values, [-2.5615528128088303]; atol=10^-10)
+    @test isapprox(eigensystem.vectors, [-0.43516214649359913; 0.5573454101893041; 0.5573454101893037; -0.43516214649359913]; atol=10^-10)
 end
