@@ -1,5 +1,6 @@
 using Test
+using SafeTestsets
 
-@testset "all" begin
-    @testset "FED" begin include("FED.jl") end
+@safetestset "ExactDiagonalization" begin
+    include("ExactDiagonalization.jl")
 end
