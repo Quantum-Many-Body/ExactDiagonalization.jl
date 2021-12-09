@@ -96,7 +96,7 @@ end
     @test getcontent(m, :id) == (m.bra, m.ket)
     @test getcontent(m, :value) == m.matrix
     @test dtype(m) == dtype(typeof(m)) == Float64
-    @test promote_type(typeof(m), ComplexF64) == EDMatrix{BinaryBases{BinaryBasis{UInt64}, Vector{BinaryBasis{UInt64}}}, SparseMatrixCSC{ComplexF64, Int}}
+    @test promote_type(typeof(m), ComplexF64) == EDMatrix{BinaryBases{BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{ComplexF64, Int}}
 end
 
 @testset "EDMatrixRepresentation && SectorFilter" begin
@@ -105,7 +105,7 @@ end
     op₁, op₂, op₃ = Operator(2.0, oids[2]', oids[1]), Operator(2.0, oids[3]', oids[2]), Operator(2.0, oids[4]', oids[3])
     ops = op₁ + op₂ + op₃
     target = BinaryBases(1:4, 1)⊕BinaryBases(1:4, 2)⊕BinaryBases(1:4, 3)
-    M = EDMatrix{BinaryBases{BinaryBasis{UInt64}, Vector{BinaryBasis{UInt64}}}, SparseMatrixCSC{Float64, Int}}
+    M = EDMatrix{BinaryBases{BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
 
     mr = EDMatrixRepresentation(target, table)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
