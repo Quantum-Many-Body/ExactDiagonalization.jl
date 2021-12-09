@@ -147,12 +147,14 @@ end
     @test statistics(ed) == statistics(typeof(ed)) == :f
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
+    vector = [0.5; -0.5; -0.5; 0.5]
     eigensystem = eigen(matrix(ed); nev=1)
     @test isapprox(eigensystem.values, [-2.0]; atol=10^-10)
-    @test isapprox(eigensystem.vectors, [0.5; -0.5; -0.5; 0.5]; atol=10^-10)
+    @test isapprox(eigensystem.vectors, vector; atol=10^-10) || isapprox(eigensystem.vectors, -vector; atol=10^-10)
 
+    vector = [-0.43516214649359913; 0.5573454101893041; 0.5573454101893037; -0.43516214649359913]
     update!(ed, U=1.0, μ=-0.5)
     eigensystem = eigen(matrix(ed); nev=1)
     @test isapprox(eigensystem.values, [-2.5615528128088303]; atol=10^-10)
-    @test isapprox(eigensystem.vectors, [-0.43516214649359913; 0.5573454101893041; 0.5573454101893037; -0.43516214649359913]; atol=10^-10)
+    @test isapprox(eigensystem.vectors, vector; atol=10^-10) || isapprox(eigensystem.vectors, -vector; atol=10^-10)
 end
