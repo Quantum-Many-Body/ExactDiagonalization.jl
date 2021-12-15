@@ -7,7 +7,7 @@ using Base.Iterators: product
 using SparseArrays: SparseMatrixCSC
 using QuantumLattices: EnumerativeVectorSpace, VectorSpace, DulPermutations, Combinations
 using QuantumLattices: OperatorUnit, OperatorProd, OperatorSum, Operator, Operators, MatrixRepresentation, Transformation
-using QuantumLattices: AbstractLattice, Bonds, Hilbert, Fock, Spin, FockTerm, SpinTerm, Term, Metric, OIDToTuple, Table, Boundary, Generator, SimplifiedGenerator, Engine
+using QuantumLattices: AbstractLattice, Bonds, Hilbert, Fock, Spin, FockTerm, SpinTerm, Term, Metric, OIDToTuple, Table, Boundary, Generator, Image, Engine
 using QuantumLattices: reparameter, id, idtype, expand, plain, creation, rank
 
 import LinearAlgebra: eigen
@@ -432,33 +432,29 @@ Get the oid-to-tuple metric for a free fermionic/bosonic system or a free phonon
 @inline @generated Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) = OIDToTuple(fieldnames(keytype(hilbert))..., :orbital)
 
 """
-    ED{L<:AbstractLattice, G<:Generator, MR<:EDMatrixRepresentation, M<:SimplifiedGenerator} <: Engine
+    ED{L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
 
 Exact diagonalization method of a quantum lattice system.
 """
-struct ED{K, L<:AbstractLattice, G<:Generator, MR<:EDMatrixRepresentation, M<:SimplifiedGenerator} <: Engine
+struct ED{K, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
     lattice::L
     H::G
-    mr::MR
     Hₘ::M
     function ED{K}(lattice::AbstractLattice, H::Generator, mr::EDMatrixRepresentation) where K
         @assert isa(K, EDKind) "ED error: wrong kind."
         Hₘ = mr(H)
-        new{K, typeof(lattice), typeof(H), typeof(mr), typeof(Hₘ)}(lattice, H, mr, Hₘ)
+        new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
 end
 @inline kind(ed::ED) = kind(typeof(ed))
 @inline kind(::Type{<:ED{K}}) where K = K
-@inline Base.eltype(ed::ED) = eltype(typeof(ed))
-@inline Base.eltype(::Type{<:ED{K, <:AbstractLattice, G} where K}) where {G<:Generator} = eltype(G)
-@inline Base.valtype(ed::ED) = valtype(typeof(ed))
-@inline Base.valtype(T::Type{<:ED}) = valtype(eltype(T))
+@inline Base.valtype(::Type{<:ED{K, <:AbstractLattice, G} where K}) where {G<:Generator} = valtype(eltype(G))
 @inline statistics(ed::ED) = statistics(typeof(ed))
 @inline statistics(::Type{<:ED{K, <:AbstractLattice, G} where K}) where {G<:Generator} = statistics(eltype(eltype(G)))
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.H; kwargs...)
-        update!(ed.Hₘ, ed.mr, ed.H)
+        update!(ed.Hₘ, ed.H)
     end
     return ed
 end
@@ -478,12 +474,12 @@ end
 
 """
     matrix(ed::ED, sector::Sector; kwargs...) -> EDMatrix
-    matrix(ed::ED, sector=first(ed.mr.brakets); kwargs...) -> EDMatrix
+    matrix(ed::ED, sector=first(ed.Hₘ.transformation.brakets); kwargs...) -> EDMatrix
 
 Get the sparse matrix representation of a quantum lattice system in a sector of the target space.
 """
 @inline matrix(ed::ED, sector::Sector; kwargs...) = matrix(ed, (sector, sector); kwargs...)
-@inline matrix(ed::ED, braket::NTuple{2, Sector}=first(ed.mr.brakets); kwargs...) = expand(SectorFilter(braket)(ed.Hₘ))[braket]
+@inline matrix(ed::ED, braket::NTuple{2, Sector}=first(ed.Hₘ.transformation.brakets); kwargs...) = expand(SectorFilter(braket)(ed.Hₘ))[braket]
 
 """
     eigen(m::EDMatrix; nev=6, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=dtype(m)[]) -> Eigen

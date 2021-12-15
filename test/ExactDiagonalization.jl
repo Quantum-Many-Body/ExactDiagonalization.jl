@@ -142,7 +142,6 @@ end
     bases = BinaryBases(1:2, 1)⊗BinaryBases(3:4, 1)
     ed = ED(lattice, hilbert, (t, U, μ), TargetSpace(bases))
     @test kind(ed) == kind(typeof(ed)) == EDKind(:FED)
-    @test eltype(ed) == eltype(typeof(ed)) == eltype(ed.H)
     @test valtype(ed) == valtype(typeof(ed)) == Float64
     @test statistics(ed) == statistics(typeof(ed)) == :f
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
