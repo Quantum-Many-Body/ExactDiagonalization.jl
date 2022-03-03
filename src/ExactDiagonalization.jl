@@ -4,7 +4,7 @@ using Arpack: eigs
 using LinearAlgebra: Eigen
 using Printf: @printf, @sprintf
 using Base.Iterators: product
-using SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC, spzeros
 using QuantumLattices: EnumerativeVectorSpace, VectorSpace, DulPermutations, Combinations
 using QuantumLattices: OperatorUnit, OperatorProd, OperatorSum, Operator, Operators, MatrixRepresentation, Transformation
 using QuantumLattices: AbstractLattice, Bonds, Hilbert, Fock, Spin, FockTerm, SpinTerm, Term, Metric, OIDToTuple, Table, Boundary, Generator, Image, Engine
@@ -304,6 +304,7 @@ end
 # CSC-formed sparse matrix representation of an operator
 """
     matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+    matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=valtype(eltype(ops))) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
@@ -335,6 +336,13 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
     end
     indptr[end] = ndata
     return SparseMatrixCSC(dimension(bra), dimension(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
+end
+function matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=valtype(eltype(ops)))
+    result = spzeros(dtype, dimension(braket[1]), dimension(braket[2]))
+    for op in ops
+        result += matrix(op, braket, table; dtype=dtype)
+    end
+    return result
 end
 
 # Generic exact diagonalization method

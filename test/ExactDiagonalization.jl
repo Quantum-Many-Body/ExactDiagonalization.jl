@@ -80,10 +80,15 @@ end
 
     braket = (BinaryBases(1:4, 2), BinaryBases(1:4, 3))
     ops = [Operator(2.0, oid) for oid in oids]
-    @test matrix(ops[1], braket, table) == SparseMatrixCSC(6, 4, [1, 2, 3, 4, 4], [3, 5, 6], [2.0, 2.0, 2.0])
-    @test matrix(ops[2], braket, table) == SparseMatrixCSC(6, 4, [1, 2, 3, 3, 4], [2, 4, 6], [-2.0, -2.0, 2.0])
-    @test matrix(ops[3], braket, table) == SparseMatrixCSC(6, 4, [1, 2, 2, 3, 4], [1, 4, 5], [2.0, -2.0, -2.0])
-    @test matrix(ops[4], braket, table) == SparseMatrixCSC(6, 4, [1, 1, 2, 3, 4], [1, 2, 3], [2.0, 2.0, 2.0])
+    m₁ = SparseMatrixCSC(6, 4, [1, 2, 3, 4, 4], [3, 5, 6], [2.0, 2.0, 2.0])
+    m₂ = SparseMatrixCSC(6, 4, [1, 2, 3, 3, 4], [2, 4, 6], [-2.0, -2.0, 2.0])
+    m₃ = SparseMatrixCSC(6, 4, [1, 2, 2, 3, 4], [1, 4, 5], [2.0, -2.0, -2.0])
+    m₄ = SparseMatrixCSC(6, 4, [1, 1, 2, 3, 4], [1, 2, 3], [2.0, 2.0, 2.0])
+    @test matrix(ops[1], braket, table) == m₁
+    @test matrix(ops[2], braket, table) == m₂
+    @test matrix(ops[3], braket, table) == m₃
+    @test matrix(ops[4], braket, table) == m₄
+    @test matrix(ops[1]+ops[2]+ops[3]+ops[4], braket, table) == m₁+m₂+m₃+m₄
 
     braket = (BinaryBases(1:4, 2), BinaryBases(1:4, 2))
     @test matrix(ops[2]'*ops[1], braket, table) == SparseMatrixCSC(6, 6, [1, 1, 2, 2, 3, 3, 3], [3, 5], [4.0, 4.0])
