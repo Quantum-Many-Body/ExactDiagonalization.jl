@@ -17,6 +17,7 @@ makedocs(;
         "Home" => "index.md",
         "Examples" => [
             "examples/Introduction.md",
+            "examples/HubbardModel.md",
             ]
         ]
 )

@@ -5,8 +5,8 @@ using LinearAlgebra: Eigen
 using Printf: @printf, @sprintf
 using Base.Iterators: product
 using SparseArrays: SparseMatrixCSC, spzeros
-using QuantumLattices: EnumerativeVectorSpace, VectorSpace, DulPermutations, Combinations
-using QuantumLattices: OperatorUnit, OperatorProd, OperatorSum, Operator, Operators, MatrixRepresentation, Transformation
+using QuantumLattices: VectorSpace, VectorSpaceStyle, VectorSpaceEnumerative, DulPermutations, Combinations
+using QuantumLattices: OperatorUnit, OperatorPack, OperatorSum, Operator, Operators, MatrixRepresentation, Transformation
 using QuantumLattices: AbstractLattice, Bonds, Hilbert, Fock, Spin, FockTerm, SpinTerm, Term, Metric, OIDToTuple, Table, Boundary, Generator, Image, Engine
 using QuantumLattices: reparameter, id, idtype, expand, plain, creation, rank
 
@@ -25,13 +25,14 @@ A sector of the Hilbert space which form the bases of an irreducible representat
 abstract type Sector <: OperatorUnit end
 
 """
-    TargetSpace{S<:Sector} <: EnumerativeVectorSpace{S}
+    TargetSpace{S<:Sector} <: VectorSpace{S}
 
 The target Hilbert space in which the exact diagonalization method is performed, which could be the direct sum of several sectors.
 """
-struct TargetSpace{S<:Sector} <: EnumerativeVectorSpace{S}
+struct TargetSpace{S<:Sector} <: VectorSpace{S}
     sectors::Vector{S}
 end
+@inline VectorSpaceStyle(::Type{<:TargetSpace}) = VectorSpaceEnumerative()
 @inline contentnames(::Type{<:TargetSpace}) = (:table,)
 @inline getcontent(target::TargetSpace, ::Val{:table}) = target.sectors
 function add!(target::TargetSpace, sector::Sector)
@@ -347,11 +348,11 @@ end
 
 # Generic exact diagonalization method
 """
-    EDMatrix{S<:Sector, M<:SparseMatrixCSC} <: OperatorProd{M, Tuple{S, S}}
+    EDMatrix{S<:Sector, M<:SparseMatrixCSC} <: OperatorPack{M, Tuple{S, S}}
 
 Matrix representation of quantum operators between a ket and a bra Hilbert space.
 """
-struct EDMatrix{S<:Sector, M<:SparseMatrixCSC} <: OperatorProd{M, Tuple{S, S}}
+struct EDMatrix{S<:Sector, M<:SparseMatrixCSC} <: OperatorPack{M, Tuple{S, S}}
     bra::S
     ket::S
     matrix::M

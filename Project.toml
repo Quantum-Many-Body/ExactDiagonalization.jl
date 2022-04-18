@@ -12,5 +12,5 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 Arpack = "0.5"
-QuantumLattices = "0.8.9"
+QuantumLattices = "0.8.12"
 julia = "1.6"
