@@ -40,7 +40,7 @@ end
     @test isequal(bs, BinaryBases((2, 1)))
     for i = 1:dimension(bs)
         @test bs[i]==BinaryBasis(i-1)
-        @test findfirst(bs[i], bs) == i
+        @test searchsortedfirst(bs[i], bs) == i
     end
     @test eltype(bs) == eltype(typeof(bs)) == BinaryBasis{UInt}
     @test collect(bs) == map(BinaryBasis, [0, 1, 2, 3])
@@ -51,7 +51,7 @@ end
     @test collect(bs) == map(BinaryBasis, [3, 5, 6, 9, 10, 12])
     @test repr(bs) == "C(4, 2)"
     for i = 1:dimension(bs)
-        @test findfirst(bs[i], bs) == i
+        @test searchsortedfirst(bs[i], bs) == i
     end
 
     bs = BinaryBases(1:2, 1) ⊗ BinaryBases(3:4, 1)

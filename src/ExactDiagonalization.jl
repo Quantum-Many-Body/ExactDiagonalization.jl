@@ -227,8 +227,8 @@ function Base.show(io::IO, bs::BinaryBases)
         @printf io "  %s\n" bs[i]
     end
 end
-@inline Base.findfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)
-@inline Base.findfirst(b::BinaryBasis, bs::BinaryBases{<:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
+@inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)
+@inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
 
 """
     ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
@@ -295,11 +295,12 @@ Construct a set of binary bases that preserves the particle number conservation.
 @inline BinaryBases(states, nparticle::Integer) = BinaryBases(states, Val(nparticle))
 function BinaryBases(states, ::Val{N}) where N
     com = Combinations{N}(sort!(collect(states); rev=true))
-    table = Vector{BinaryBasis{typeof(Unsigned(first(states)))}}(undef, length(com))
+    I = typeof(Unsigned(first(states)))
+    table = Vector{BinaryBasis{I}}(undef, length(com))
     for (i, poses) in enumerate(com)
-        table[end+1-i] = BinaryBasis(poses)
+        table[end+1-i] = BinaryBasis{I}(poses)
     end
-    return BinaryBases([(BinaryBasis(states), Float64(N))], table)
+    return BinaryBases([(BinaryBasis{I}(states), Float64(N))], table)
 end
 
 # CSC-formed sparse matrix representation of an operator
@@ -330,9 +331,12 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
             statistics(eltype(op))==:f && for j = 1:rank(op)
                 nsign += count(intermediate[j], 1, sequence[j]-1)
             end
-            indices[ndata] = findfirst(intermediate[end], bra)
-            data[ndata] = op.value*(-1)^nsign
-            ndata += 1
+            index = searchsortedfirst(intermediate[end], bra)
+            if bra[index] == intermediate[end]
+                indices[ndata] = index
+                data[ndata] = op.value*(-1)^nsign
+                ndata += 1
+            end
         end
     end
     indptr[end] = ndata
@@ -441,25 +445,24 @@ Get the oid-to-tuple metric for a free fermionic/bosonic system or a free phonon
 @inline @generated Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) = OIDToTuple(fieldnames(keytype(hilbert))..., :orbital)
 
 """
-    ED{L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
+    ED{K<:EDKind, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
 
 Exact diagonalization method of a quantum lattice system.
 """
-struct ED{K, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
+struct ED{K<:EDKind, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
     lattice::L
     H::G
     Hₘ::M
     function ED{K}(lattice::AbstractLattice, H::Generator, mr::EDMatrixRepresentation) where K
-        @assert isa(K, EDKind) "ED error: wrong kind."
         Hₘ = mr(H)
         new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
 end
 @inline kind(ed::ED) = kind(typeof(ed))
-@inline kind(::Type{<:ED{K}}) where K = K
-@inline Base.valtype(::Type{<:ED{K, <:AbstractLattice, G} where K}) where {G<:Generator} = valtype(eltype(G))
+@inline kind(::Type{<:ED{K}}) where K = K()
+@inline Base.valtype(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:Generator} = valtype(eltype(G))
 @inline statistics(ed::ED) = statistics(typeof(ed))
-@inline statistics(::Type{<:ED{K, <:AbstractLattice, G} where K}) where {G<:Generator} = statistics(eltype(eltype(G)))
+@inline statistics(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:Generator} = statistics(eltype(eltype(G)))
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.H; kwargs...)
@@ -475,10 +478,10 @@ end
 Construct the exact diagonalization method for a quantum lattice system.
 """
 function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; boundary::Boundary=plain)
-    K = EDKind(typeof(terms))
+    k = EDKind(typeof(terms))
     H = Generator(terms, Bonds(lattice), hilbert; half=false, boundary=boundary)
-    mr = EDMatrixRepresentation(targetspace, Table(hilbert, Metric(K, hilbert)))
-    return ED{K}(lattice, H, mr)
+    mr = EDMatrixRepresentation(targetspace, Table(hilbert, Metric(k, hilbert)))
+    return ED{typeof(k)}(lattice, H, mr)
 end
 
 """
