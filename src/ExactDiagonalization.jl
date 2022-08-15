@@ -332,7 +332,7 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
                 nsign += count(intermediate[j], 1, sequence[j]-1)
             end
             index = searchsortedfirst(intermediate[end], bra)
-            if index<=dimension(bra) && bra[index] == intermediate[end]
+            if index<=dimension(bra) && bra[index]==intermediate[end]
                 indices[ndata] = index
                 data[ndata] = op.value*(-1)^nsign
                 ndata += 1
