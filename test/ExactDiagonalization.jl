@@ -1,10 +1,13 @@
-using Test
-using LinearAlgebra: eigen
-using SparseArrays: SparseMatrixCSC
-using QuantumLattices: PID, Point, Lattice, FID, Index, OID, Table, OIDToTuple, Metric, Hilbert, Spin, Fock
-using QuantumLattices: Operator, OperatorSum, FockTerm, SpinTerm, Hopping, Onsite, Hubbard, Parameters
-using QuantumLattices: ⊗, ⊕, dimension, contentnames, getcontent, parameternames, dtype, add!, matrix, idtype, kind, statistics, update!
 using ExactDiagonalization
+using LinearAlgebra: eigen
+using QuantumLattices: ⊕, ⊗, add!, dimension, dtype, kind, matrix, update!
+using QuantumLattices: CompositeIndex, Hilbert, Index, Metric, OperatorUnitToTuple, Table, statistics
+using QuantumLattices: Parameters
+using QuantumLattices: Operator, OperatorSum, idtype
+using QuantumLattices.QuantumSystems: FID, Fock, FockTerm, Hopping, Hubbard, Onsite, Spin, SpinTerm
+using QuantumLattices: Lattice, Point
+using QuantumLattices: contentnames, getcontent, parameternames
+using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
     basis = BinaryBasis(5)
@@ -75,11 +78,11 @@ end
 end
 
 @testset "matrix" begin
-    oids = [OID(Index(PID(i), FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
-    table = Table(oids, OIDToTuple(:site, :orbital, :spin))
+    indexes = [CompositeIndex(Index(i, FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    table = Table(indexes, OperatorUnitToTuple(:site, :orbital, :spin))
 
     braket = (BinaryBases(1:4, 2), BinaryBases(1:4, 3))
-    ops = [Operator(2.0, oid) for oid in oids]
+    ops = [Operator(2.0, index) for index in indexes]
     m₁ = SparseMatrixCSC(6, 4, [1, 2, 3, 4, 4], [3, 5, 6], [2.0, 2.0, 2.0])
     m₂ = SparseMatrixCSC(6, 4, [1, 2, 3, 3, 4], [2, 4, 6], [-2.0, -2.0, 2.0])
     m₃ = SparseMatrixCSC(6, 4, [1, 2, 2, 3, 4], [1, 4, 5], [2.0, -2.0, -2.0])
@@ -105,9 +108,9 @@ end
 end
 
 @testset "EDMatrixRepresentation && SectorFilter" begin
-    oids = [OID(Index(PID(i), FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
-    table = Table(oids, OIDToTuple(:site, :orbital, :spin))
-    op₁, op₂, op₃ = Operator(2.0, oids[2]', oids[1]), Operator(2.0, oids[3]', oids[2]), Operator(2.0, oids[4]', oids[3])
+    indexes = [CompositeIndex(Index(i, FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    table = Table(indexes, OperatorUnitToTuple(:site, :orbital, :spin))
+    op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃
     target = BinaryBases(1:4, 1)⊕BinaryBases(1:4, 2)⊕BinaryBases(1:4, 3)
     M = EDMatrix{BinaryBases{BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
@@ -135,11 +138,11 @@ end
     @test EDKind(SpinTerm) == EDKind(:SED)
     @test EDKind(Tuple{Hopping, Onsite, Hubbard}) == EDKind(:FED)
 
-    @test Metric(EDKind(:FED), Hilbert(PID(1)=>Fock{:f}(1, 2, 2))) == OIDToTuple(:spin, :site, :orbital)
-    @test Metric(EDKind(:SED), Hilbert(PID(1)=>Spin{1//2}(1))) == OIDToTuple(:site, :orbital)
+    @test Metric(EDKind(:FED), Hilbert(1=>Fock{:f}(1, 2))) == OperatorUnitToTuple(:spin, :site, :orbital)
+    @test Metric(EDKind(:SED), Hilbert(1=>Spin{1//2}())) == OperatorUnitToTuple(:site)
 
-    lattice = Lattice(:L2P, [Point(PID(1), [0.0]), Point(PID(2), [1.0])])
-    hilbert = Hilbert(pid=>Fock{:f}(1, 2, 2) for pid in lattice.pids)
+    lattice = Lattice([0.0], [1.0])
+    hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
     t = Hopping(:t, 1.0, 1)
     U = Hubbard(:U, 0.0, modulate=true)
     μ = Onsite(:μ, 0.0, modulate=true)

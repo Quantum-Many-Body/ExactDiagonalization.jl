@@ -1,20 +1,26 @@
 module ExactDiagonalization
 
 using Arpack: eigs
+using Base.Iterators: product
 using LinearAlgebra: Eigen
 using Printf: @printf, @sprintf
-using Base.Iterators: product
+using QuantumLattices: expand, id, rank
+using QuantumLattices: plain, Boundary, Hilbert, Metric, OperatorUnitToTuple, Table, Term
+using QuantumLattices: Frontend, Image, OperatorGenerator
+using QuantumLattices: MatrixRepresentation, Operator, OperatorPack, Operators, OperatorSum, OperatorUnit, Transformation, idtype
+using QuantumLattices: creation, Fock, FockTerm, Spin, SpinTerm
+using QuantumLattices: AbstractLattice, Neighbors, bonds
+using QuantumLattices: Combinations, DuplicatePermutations, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reparameter
 using SparseArrays: SparseMatrixCSC, spzeros
-using QuantumLattices: VectorSpace, VectorSpaceStyle, VectorSpaceEnumerative, DulPermutations, Combinations
-using QuantumLattices: OperatorUnit, OperatorPack, OperatorSum, Operator, Operators, MatrixRepresentation, Transformation
-using QuantumLattices: AbstractLattice, Bonds, Hilbert, Fock, Spin, FockTerm, SpinTerm, Term, Metric, OIDToTuple, Table, Boundary, Generator, Image, Engine
-using QuantumLattices: reparameter, id, idtype, expand, plain, creation, rank
 
 import LinearAlgebra: eigen
-import QuantumLattices: add!, ⊕, ⊗, parameternames, contentnames, getcontent, dtype, kind, update!, statistics, matrix, dimension, Parameters
+import QuantumLattices: ⊕, ⊗, add!, dimension, dtype, kind, matrix, update!
+import QuantumLattices: contentnames, getcontent, parameternames
+import QuantumLattices: statistics
+import QuantumLattices: Parameters
 
-export Sector, BinaryBasis, BinaryBasisRange, BinaryBases, TargetSpace
-export EDMatrix, EDMatrixRepresentation, SectorFilter, EDKind, ED
+export BinaryBases, BinaryBasis, BinaryBasisRange, Sector, TargetSpace
+export ED, EDKind, EDMatrix, EDMatrixRepresentation, SectorFilter
 export productable, sumable
 
 """
@@ -277,7 +283,7 @@ Construct a set of binary bases that does not preserve the particle number conse
 @inline BinaryBases(states) = BinaryBases(Tuple(states))
 function BinaryBases(states::NTuple{N, Integer}) where N
     states = NTuple{N, eltype(states)}(sort!(collect(states); rev=true))
-    com = DulPermutations{N}((false, true))
+    com = DuplicatePermutations{N}((false, true))
     table = Vector{BinaryBasis{typeof(Unsigned(first(states)))}}(undef, length(com))
     for (i, poses) in enumerate(com)
         table[i] = BinaryBasis(states; filter=index->poses[index])
@@ -317,7 +323,7 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
     ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
     data, indices, indptr = zeros(dtype, dimension(ket)), zeros(Int, dimension(ket)), zeros(Int, dimension(ket)+1)
     sequence = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
-    iscreation = NTuple{rank(op), Bool}(oid.index.iid.nambu==creation for oid in reverse(id(op)))
+    iscreation = NTuple{rank(op), Bool}(index.index.iid.nambu==creation for index in reverse(id(op)))
     for i = 1:dimension(ket)
         flag = true
         indptr[i] = ndata
@@ -436,33 +442,33 @@ struct EDKind{K} end
 end
 
 """
-    Metric(::EDKind{:FED}, hilbert::Hilbert{<:Fock}) -> OIDToTuple
-    Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) -> OIDToTuple
+    Metric(::EDKind{:FED}, hilbert::Hilbert{<:Fock}) -> OperatorUnitToTuple
+    Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) -> OperatorUnitToTuple
 
-Get the oid-to-tuple metric for a free fermionic/bosonic system or a free phononic system.
+Get the index-to-tuple metric for a free fermionic/bosonic system or a free phononic system.
 """
-@inline @generated Metric(::EDKind{:FED}, hilbert::Hilbert{<:Fock}) = OIDToTuple(:spin, fieldnames(keytype(hilbert))..., :orbital)
-@inline @generated Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) = OIDToTuple(fieldnames(keytype(hilbert))..., :orbital)
+@inline @generated Metric(::EDKind{:FED}, hilbert::Hilbert{<:Fock}) = OperatorUnitToTuple(:spin, :site, :orbital)
+@inline @generated Metric(::EDKind{:SED}, hilbert::Hilbert{<:Spin}) = OperatorUnitToTuple(:site)
 
 """
-    ED{K<:EDKind, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
+    ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Frontend
 
 Exact diagonalization method of a quantum lattice system.
 """
-struct ED{K<:EDKind, L<:AbstractLattice, G<:Generator, M<:Image} <: Engine
+struct ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Frontend
     lattice::L
     H::G
     Hₘ::M
-    function ED{K}(lattice::AbstractLattice, H::Generator, mr::EDMatrixRepresentation) where K
+    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation) where K
         Hₘ = mr(H)
         new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
 end
 @inline kind(ed::ED) = kind(typeof(ed))
 @inline kind(::Type{<:ED{K}}) where K = K()
-@inline Base.valtype(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:Generator} = valtype(eltype(G))
+@inline Base.valtype(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:OperatorGenerator} = valtype(eltype(G))
 @inline statistics(ed::ED) = statistics(typeof(ed))
-@inline statistics(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:Generator} = statistics(eltype(eltype(G)))
+@inline statistics(::Type{<:ED{<:EDKind, <:AbstractLattice, G}}) where {G<:OperatorGenerator} = statistics(eltype(eltype(G)))
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.H; kwargs...)
@@ -473,13 +479,14 @@ end
 @inline Parameters(ed::ED) = Parameters(ed.H)
 
 """
-    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; boundary::Boundary=plain)
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain)
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
-function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; boundary::Boundary=plain)
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain)
     k = EDKind(typeof(terms))
-    H = Generator(terms, Bonds(lattice), hilbert; half=false, boundary=boundary)
+    isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
+    H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
     mr = EDMatrixRepresentation(targetspace, Table(hilbert, Metric(k, hilbert)))
     return ED{typeof(k)}(lattice, H, mr)
 end

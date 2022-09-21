@@ -14,17 +14,13 @@ using ExactDiagonalization
 using LinearAlgebra: eigen
 
 # define the unitcell of the square lattice
-unitcell = Lattice(:Square,
-    [Point(PID(1), [0.0, 0.0])],
-    vectors=[[1.0, 0.0], [0.0, 1.0]],
-    neighbors=1
-    )
+unitcell = Lattice([0.0, 0.0]; name=:Square, vectors=[[1.0, 0.0], [0.0, 1.0]])
 
 # define a finite 3×4 cluster of the square lattice with open boundary condition
 lattice = Lattice(unitcell, translations"3O-4O")
 
 # define the Hilbert space (single-orbital spin-1/2 complex fermion)
-hilbert = Hilbert(pid=>Fock{:f}(1, 2, 2) for pid in lattice.pids)
+hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
 
 # define the binary bases of the a half-filled system on the above cluster
 bases = BinaryBases(1:12, 6) ⊗ BinaryBases(13:24, 6)
