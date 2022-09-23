@@ -4,8 +4,8 @@ using QuantumLattices: ⊕, ⊗, add!, dimension, dtype, kind, matrix, update!
 using QuantumLattices: CompositeIndex, Hilbert, Index, Metric, OperatorUnitToTuple, Table, statistics
 using QuantumLattices: Parameters
 using QuantumLattices: Operator, OperatorSum, idtype
-using QuantumLattices.QuantumSystems: FID, Fock, FockTerm, Hopping, Hubbard, Onsite, Spin, SpinTerm
-using QuantumLattices: Lattice, Point
+using QuantumLattices: FID, Fock, FockTerm, Hopping, Hubbard, Onsite, Spin, SpinTerm
+using QuantumLattices: Lattice
 using QuantumLattices: contentnames, getcontent, parameternames
 using SparseArrays: SparseMatrixCSC
 
