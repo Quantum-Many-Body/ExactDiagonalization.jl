@@ -10,7 +10,7 @@ Based on the **symbolic operator representation** of a quantum lattice system in
 
 ## Installation
 
-In Julia **v1.6+**, please type `]` in the REPL to use the package mode, then type this command:
+In Julia **v1.8+**, please type `]` in the REPL to use the package mode, then type this command:
 
 ```julia
 pkg> add ExactDiagonalization
