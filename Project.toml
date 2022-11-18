@@ -1,7 +1,7 @@
 name = "ExactDiagonalization"
 uuid = "52dcaa32-6da7-11e9-20ef-755843cf72eb"
 authors = ["waltergu <waltergu1989@gmail.com>"]
-version = "0.1.4"
+version = "0.1.5"
 
 [deps]
 Arpack = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
@@ -12,5 +12,5 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 Arpack = "0.5"
-QuantumLattices = "0.9"
+QuantumLattices = "0.9.4"
 julia = "1.8"

@@ -1,6 +1,6 @@
 using ExactDiagonalization
 using LinearAlgebra: eigen
-using QuantumLattices: ⊕, ⊗, add!, dimension, dtype, kind, matrix, update!
+using QuantumLattices: ⊕, ⊗, add!, dtype, kind, matrix, update!
 using QuantumLattices: CompositeIndex, Hilbert, Index, Metric, OperatorUnitToTuple, Table, statistics
 using QuantumLattices: Parameters
 using QuantumLattices: Operator, OperatorSum, idtype
@@ -29,8 +29,8 @@ end
 @testset "BinaryBasisRange" begin
     bbr = BinaryBasisRange(UInt(0):UInt(4))
     @test issorted(bbr) == true
-    @test dimension(bbr) == 5
-    for i = 1:dimension(bbr)
+    @test length(bbr) == 5
+    for i = 1:length(bbr)
         @test bbr[i] == BinaryBasis(UInt(i-1))
     end
 end
@@ -38,10 +38,10 @@ end
 @testset "BinaryBases" begin
     bs = BinaryBases(2)
     @test issorted(bs) == true
-    @test dimension(bs) == length(bs) == 4
+    @test length(bs) == length(bs) == 4
     @test bs==BinaryBases(1:2)
     @test isequal(bs, BinaryBases((2, 1)))
-    for i = 1:dimension(bs)
+    for i = 1:length(bs)
         @test bs[i]==BinaryBasis(i-1)
         @test searchsortedfirst(bs[i], bs) == i
     end
@@ -53,7 +53,7 @@ end
     bs = BinaryBases(4, 2)
     @test collect(bs) == map(BinaryBasis, [3, 5, 6, 9, 10, 12])
     @test repr(bs) == "C(4, 2)"
-    for i = 1:dimension(bs)
+    for i = 1:length(bs)
         @test searchsortedfirst(bs[i], bs) == i
     end
 
@@ -66,8 +66,8 @@ end
     bs₁ = BinaryBases(1:4, 2)
     bs₂ = BinaryBases(1:4, 3)
     ts = TargetSpace(bs₁, bs₂)
-    @test contentnames(typeof(ts)) == (:table,)
-    @test getcontent(ts, :table) == ts.sectors
+    @test contentnames(typeof(ts)) == (:contents,)
+    @test getcontent(ts, :contents) == ts.sectors
     @test add!(add!(TargetSpace(typeof(bs₁)[]), bs₁), bs₂) == add!(TargetSpace(typeof(bs₁)[]), ts) == ts
     @test bs₁⊕bs₂ == ts
 
@@ -78,7 +78,7 @@ end
 end
 
 @testset "matrix" begin
-    indexes = [CompositeIndex(Index(i, FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    indexes = [CompositeIndex(Index(i, FID{:f}(1, 0, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
     table = Table(indexes, OperatorUnitToTuple(:site, :orbital, :spin))
 
     braket = (BinaryBases(1:4, 2), BinaryBases(1:4, 3))
@@ -108,7 +108,7 @@ end
 end
 
 @testset "EDMatrixRepresentation && SectorFilter" begin
-    indexes = [CompositeIndex(Index(i, FID{:f}(1, 1, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    indexes = [CompositeIndex(Index(i, FID{:f}(1, 0, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
     table = Table(indexes, OperatorUnitToTuple(:site, :orbital, :spin))
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃

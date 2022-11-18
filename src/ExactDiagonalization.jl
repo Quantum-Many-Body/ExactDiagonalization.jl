@@ -7,14 +7,14 @@ using Printf: @printf, @sprintf
 using QuantumLattices: expand, id, rank
 using QuantumLattices: plain, Boundary, Hilbert, Metric, OperatorUnitToTuple, Table, Term
 using QuantumLattices: Frontend, Image, OperatorGenerator
-using QuantumLattices: MatrixRepresentation, Operator, OperatorPack, Operators, OperatorSum, OperatorUnit, Transformation, idtype
+using QuantumLattices: LinearTransformation, MatrixRepresentation, Operator, OperatorPack, Operators, OperatorSum, OperatorUnit, idtype
 using QuantumLattices: creation, Fock, FockTerm, Spin, SpinTerm
 using QuantumLattices: AbstractLattice, Neighbors, bonds
 using QuantumLattices: Combinations, DuplicatePermutations, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reparameter
 using SparseArrays: SparseMatrixCSC, spzeros
 
 import LinearAlgebra: eigen
-import QuantumLattices: ⊕, ⊗, add!, dimension, dtype, kind, matrix, update!
+import QuantumLattices: ⊕, ⊗, add!, dtype, kind, matrix, update!
 import QuantumLattices: contentnames, getcontent, parameternames
 import QuantumLattices: statistics
 import QuantumLattices: Parameters
@@ -39,8 +39,8 @@ struct TargetSpace{S<:Sector} <: VectorSpace{S}
     sectors::Vector{S}
 end
 @inline VectorSpaceStyle(::Type{<:TargetSpace}) = VectorSpaceEnumerative()
-@inline contentnames(::Type{<:TargetSpace}) = (:table,)
-@inline getcontent(target::TargetSpace, ::Val{:table}) = target.sectors
+@inline contentnames(::Type{<:TargetSpace}) = (:contents,)
+@inline getcontent(target::TargetSpace, ::Val{:contents}) = target.sectors
 function add!(target::TargetSpace, sector::Sector)
     @assert all(map(sec->sumable(sec, sector), target.sectors)) "add! error: could not be direct summed."
     push!(target.sectors, sector)
@@ -195,7 +195,7 @@ struct BinaryBasisRange{I<:Unsigned} <: VectorSpace{BinaryBasis{I}}
     slice::UnitRange{I}
 end
 @inline Base.issorted(bbr::BinaryBasisRange) = true
-@inline dimension(bbr::BinaryBasisRange) = length(bbr.slice)
+@inline Base.length(bbr::BinaryBasisRange) = length(bbr.slice)
 @inline Base.getindex(bbr::BinaryBasisRange, i::Integer) = BinaryBasis(bbr.slice[i])
 
 """
@@ -208,14 +208,13 @@ struct BinaryBases{B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
     table::T
 end
 @inline Base.issorted(bs::BinaryBases) = true
-@inline Base.length(bs::BinaryBases) = dimension(bs)
-@inline dimension(bs::BinaryBases) = length(bs.table)
+@inline Base.length(bs::BinaryBases) = length(bs.table)
 @inline Base.:(==)(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
 @inline Base.isequal(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
 @inline Base.getindex(bs::BinaryBases, i::Integer) = bs.table[i]
 @inline Base.eltype(bs::BinaryBases) = eltype(typeof(bs))
 @inline Base.eltype(::Type{<:BinaryBases{B}}) where {B<:BinaryBasis} = B
-@inline Base.iterate(bs::BinaryBases, state=1) = state>dimension(bs) ? nothing : (bs.table[state], state+1)
+@inline Base.iterate(bs::BinaryBases, state=1) = state>length(bs) ? nothing : (bs.table[state], state+1)
 function Base.repr(bs::BinaryBases)
     result = String[]
     for (rep, nparticle) in bs.id
@@ -229,7 +228,7 @@ function Base.repr(bs::BinaryBases)
 end
 function Base.show(io::IO, bs::BinaryBases)
     @printf io "%s:\n" repr(bs)
-    for i = 1:dimension(bs)
+    for i = 1:length(bs)
         @printf io "  %s\n" bs[i]
     end
 end
@@ -243,7 +242,7 @@ Get the direct product of two sets of binary bases.
 """
 function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
     @assert productable(bs₁, bs₂) "⊗ error: the input two sets of bases cannot be direct producted."
-    table = Vector{promote_type(eltype(bs₁), eltype(bs₂))}(undef, dimension(bs₁)*dimension(bs₂))
+    table = Vector{promote_type(eltype(bs₁), eltype(bs₂))}(undef, length(bs₁)*length(bs₂))
     count = 1
     for (b₁, b₂) in product(bs₁, bs₂)
         table[count] = b₁⊗b₂
@@ -321,10 +320,10 @@ Here, `table` specifies the order of the operator ids.
 function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op))
     bra, ket = braket[1], braket[2]
     ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
-    data, indices, indptr = zeros(dtype, dimension(ket)), zeros(Int, dimension(ket)), zeros(Int, dimension(ket)+1)
+    data, indices, indptr = zeros(dtype, length(ket)), zeros(Int, length(ket)), zeros(Int, length(ket)+1)
     sequence = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
     iscreation = NTuple{rank(op), Bool}(index.index.iid.nambu==creation for index in reverse(id(op)))
-    for i = 1:dimension(ket)
+    for i = 1:length(ket)
         flag = true
         indptr[i] = ndata
         intermediate[1] = ket[i]
@@ -338,7 +337,7 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
                 nsign += count(intermediate[j], 1, sequence[j]-1)
             end
             index = searchsortedfirst(intermediate[end], bra)
-            if index<=dimension(bra) && bra[index]==intermediate[end]
+            if index<=length(bra) && bra[index]==intermediate[end]
                 indices[ndata] = index
                 data[ndata] = op.value*(-1)^nsign
                 ndata += 1
@@ -346,10 +345,10 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
         end
     end
     indptr[end] = ndata
-    return SparseMatrixCSC(dimension(bra), dimension(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
+    return SparseMatrixCSC(length(bra), length(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
 end
 function matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=valtype(eltype(ops)))
-    result = spzeros(dtype, dimension(braket[1]), dimension(braket[2]))
+    result = spzeros(dtype, length(braket[1]), length(braket[2]))
     for op in ops
         result += matrix(op, braket, table; dtype=dtype)
     end
@@ -411,11 +410,11 @@ Construct a exact matrix representation.
 @inline EDMatrixRepresentation(target::TargetSpace, table) = EDMatrixRepresentation([(sector, sector) for sector in target], table)
 
 """
-    SectorFilter{S} <: Transformation
+    SectorFilter{S} <: LinearTransformation
 
 Filter the target bra and ket Hilbert spaces.
 """
-struct SectorFilter{S} <: Transformation
+struct SectorFilter{S} <: LinearTransformation
     brakets::Set{NTuple{2, S}}
 end
 @inline Base.valtype(::Type{<:SectorFilter}, M::Type{<:OperatorSum{<:EDMatrix}}) = M
