@@ -17,7 +17,7 @@ using LinearAlgebra: eigen
 unitcell = Lattice([0.0, 0.0]; name=:Square, vectors=[[1.0, 0.0], [0.0, 1.0]])
 
 # define a finite 3×4 cluster of the square lattice with open boundary condition
-lattice = Lattice(unitcell, translations"3O-4O")
+lattice = Lattice(unitcell, (3, 4))
 
 # define the Hilbert space (single-orbital spin-1/2 complex fermion)
 hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
