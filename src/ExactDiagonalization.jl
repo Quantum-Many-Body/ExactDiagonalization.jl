@@ -8,7 +8,7 @@ using QuantumLattices: expand, id, rank
 using QuantumLattices: plain, Boundary, Hilbert, Metric, OperatorUnitToTuple, Table, Term
 using QuantumLattices: Frontend, Image, OperatorGenerator
 using QuantumLattices: LinearTransformation, MatrixRepresentation, Operator, OperatorPack, Operators, OperatorSum, OperatorUnit, idtype
-using QuantumLattices: creation, Fock, FockTerm, Spin, SpinTerm
+using QuantumLattices: Fock, FockTerm, Spin, SpinTerm, iscreation
 using QuantumLattices: AbstractLattice, Neighbors, bonds
 using QuantumLattices: Combinations, DuplicatePermutations, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reparameter
 using SparseArrays: SparseMatrixCSC, spzeros
@@ -321,20 +321,20 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
     bra, ket = braket[1], braket[2]
     ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
     data, indices, indptr = zeros(dtype, length(ket)), zeros(Int, length(ket)), zeros(Int, length(ket)+1)
-    sequence = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
-    iscreation = NTuple{rank(op), Bool}(index.index.iid.nambu==creation for index in reverse(id(op)))
+    sequences = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
+    iscreations = NTuple{rank(op), Bool}(iscreation(index) for index in reverse(id(op)))
     for i = 1:length(ket)
         flag = true
         indptr[i] = ndata
         intermediate[1] = ket[i]
         for j = 1:rank(op)
-            isone(intermediate[j], sequence[j])==iscreation[j] && (flag = false; break)
-            intermediate[j+1] = iscreation[j] ? one(intermediate[j], sequence[j]) : zero(intermediate[j], sequence[j])
+            isone(intermediate[j], sequences[j])==iscreations[j] && (flag = false; break)
+            intermediate[j+1] = iscreations[j] ? one(intermediate[j], sequences[j]) : zero(intermediate[j], sequences[j])
         end
         if flag
             nsign = 0
             statistics(eltype(op))==:f && for j = 1:rank(op)
-                nsign += count(intermediate[j], 1, sequence[j]-1)
+                nsign += count(intermediate[j], 1, sequences[j]-1)
             end
             index = searchsortedfirst(intermediate[end], bra)
             if index<=length(bra) && bra[index]==intermediate[end]
