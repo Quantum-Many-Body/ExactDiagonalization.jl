@@ -1,4 +1,5 @@
 using ExactDiagonalization
+using ExactDiagonalization: sumable, productable
 using LinearAlgebra: eigen
 using QuantumLattices: ⊕, ⊗, add!, dtype, kind, matrix, update!
 using QuantumLattices: CompositeIndex, Hilbert, Index, Metric, OperatorUnitToTuple, Table, statistics
