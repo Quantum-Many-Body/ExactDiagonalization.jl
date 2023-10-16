@@ -2,8 +2,8 @@ module CanonicalFockSystems
 
 using Base.Iterators: product
 using Printf: @printf, @sprintf
-using QuantumLattices: plain, bonds, id, iscreation, rank
-using QuantumLattices: AbstractLattice, Boundary, Combinations, DuplicatePermutations, Hilbert, Fock, FockTerm, Metric, Neighbors, Operator, OperatorGenerator, Operators, OperatorUnitToTuple, Table, Term, VectorSpace
+using QuantumLattices: plain, bonds, id, iscreation, periods, rank
+using QuantumLattices: AbstractLattice, AbelianNumber, Boundary, Combinations, DuplicatePermutations, Hilbert, Fock, FockTerm, Metric, Neighbors, Operator, OperatorGenerator, Operators, OperatorUnitToTuple, ParticleNumber, Table, Term, VectorSpace
 using SparseArrays: SparseMatrixCSC, spzeros
 using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
@@ -127,12 +127,12 @@ end
 @inline Base.getindex(bbr::BinaryBasisRange, i::Integer) = BinaryBasis(bbr.slice[i])
 
 """
-    BinaryBases{B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
+    BinaryBases{A<:AbelianNumber, B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
 
 A set of binary bases.
 """
-struct BinaryBases{B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
-    id::Vector{Tuple{B, Float64}}
+struct BinaryBases{A<:AbelianNumber, B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
+    id::Vector{Tuple{B, A}}
     table::T
 end
 @inline Base.issorted(::BinaryBases) = true
@@ -141,27 +141,30 @@ end
 @inline Base.isequal(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
 @inline Base.getindex(bs::BinaryBases, i::Integer) = bs.table[i]
 @inline Base.eltype(bs::BinaryBases) = eltype(typeof(bs))
-@inline Base.eltype(::Type{<:BinaryBases{B}}) where {B<:BinaryBasis} = B
+@inline Base.eltype(::Type{<:BinaryBases{<:AbelianNumber, B}}) where {B<:BinaryBasis} = B
 @inline Base.iterate(bs::BinaryBases, state=1) = state>length(bs) ? nothing : (bs.table[state], state+1)
 function Base.repr(bs::BinaryBases)
     result = String[]
-    for (rep, nparticle) in bs.id
-        if isnan(nparticle)
-            push!(result, @sprintf "2^%s" count(rep))
-        else
-            push!(result, @sprintf "C(%s, %s)" count(rep) Int(nparticle))
-        end
+    for (states, qn) in bs.id
+        push!(result, @sprintf "{2^%s: %s}" count(states) qn)
     end
     return join(result, " ⊗ ")
 end
 function Base.show(io::IO, bs::BinaryBases)
-    @printf io "%s:\n" repr(bs)
-    for i = 1:length(bs)
-        @printf io "  %s\n" bs[i]
+    for (i, (states, qn)) in enumerate(bs.id)
+        @printf io "{2^[%s]: %s}" join(collect(states), " ") qn
+        i<length(bs.id) && @printf io "%s" " ⊗ "
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)
-@inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
+@inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
+
+"""
+    AbelianNumber(bs::BinaryBases)
+
+Get the Abelian quantum number of a set of binary bases.
+"""
+AbelianNumber(bs::BinaryBases) = sum(rep->rep[2], bs.id)
 
 """
     ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
@@ -184,7 +187,8 @@ end
 
 Judge whether two sets of binary bases could be direct producted.
 """
-function productable(bs₁::BinaryBases, bs₂::BinaryBases)
+function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁, A₂}
+    A₁==A₂ || return false
     for (irr₁, irr₂) in product(bs₁.id, bs₂.id)
         isequal(irr₁[1].rep & irr₂[1].rep, 0) || return false
     end
@@ -203,37 +207,46 @@ Strictly speaking, two sets of binary bases could be direct summed if and only i
 """
     BinaryBases(nstate::Integer)
     BinaryBases(states)
+    BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
+    BinaryBases{A}(states) where {A<:AbelianNumber}
 
-Construct a set of binary bases that does not preserve the particle number conservation.
+Construct a set of binary bases that subject to no quantum number conservation.
 """
-@inline BinaryBases(nstate::Integer) = BinaryBases([(BinaryBasis(1:nstate), NaN)], BinaryBasisRange(UInt(0):UInt(2^nstate-1)))
-@inline BinaryBases(states) = BinaryBases(Tuple(states))
-function BinaryBases(states::NTuple{N, Integer}) where N
+@inline BinaryBases(nstate::Integer) = BinaryBases{ParticleNumber}(nstate)
+@inline BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber} = BinaryBases([(BinaryBasis(1:nstate), A(map(p->NaN, periods(A))...))], BinaryBasisRange(UInt(0):UInt(2^nstate-1)))
+@inline BinaryBases(states) = BinaryBases{ParticleNumber}(states)
+@inline BinaryBases{A}(states) where {A<:AbelianNumber} = BinaryBases{A}(Tuple(states))
+function BinaryBases{A}(states::NTuple{N, Integer}) where {A<:AbelianNumber, N}
     states = NTuple{N, eltype(states)}(sort!(collect(states); rev=true))
     com = DuplicatePermutations{N}((false, true))
     table = Vector{BinaryBasis{typeof(Unsigned(first(states)))}}(undef, length(com))
     for (i, poses) in enumerate(com)
         table[i] = BinaryBasis(states; filter=index->poses[index])
     end
-    return BinaryBases([(BinaryBasis(states), NaN)], table)
+    return BinaryBases([(BinaryBasis(states), A(map(p->NaN, periods(A))...))], table)
 end
 
 """
     BinaryBases(nstate::Integer, nparticle::Integer)
     BinaryBases(states, nparticle::Integer)
+    BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
+    BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
 
 Construct a set of binary bases that preserves the particle number conservation.
 """
-@inline BinaryBases(nstate::Integer, nparticle::Integer) = BinaryBases(1:nstate, Val(nparticle))
-@inline BinaryBases(states, nparticle::Integer) = BinaryBases(states, Val(nparticle))
-function BinaryBases(states, ::Val{N}) where N
+@inline BinaryBases(nstate::Integer, nparticle::Integer) = BinaryBases{ParticleNumber}(nstate, nparticle)
+@inline BinaryBases(states, nparticle::Integer) = BinaryBases{ParticleNumber}(states, nparticle)
+@inline BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(1:nstate, Val(nparticle); kwargs...)
+@inline BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(states, Val(nparticle); kwargs...)
+function BinaryBases{A}(states, ::Val{N}; kwargs...) where {A<:AbelianNumber, N}
     com = Combinations{N}(sort!(collect(states); rev=true))
     I = typeof(Unsigned(first(states)))
     table = Vector{BinaryBasis{I}}(undef, length(com))
     for (i, poses) in enumerate(com)
         table[end+1-i] = BinaryBasis{I}(poses)
     end
-    return BinaryBases([(BinaryBasis{I}(states), Float64(N))], table)
+    kwargs = (kwargs..., N=N)
+    return BinaryBases([(BinaryBasis{I}(states), A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...))], table)
 end
 
 # CSC-formed sparse matrix representation of an operator

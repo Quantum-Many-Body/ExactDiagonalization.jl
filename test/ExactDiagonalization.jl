@@ -1,13 +1,8 @@
 using ExactDiagonalization
 using ExactDiagonalization: sumable, productable
 using LinearAlgebra: eigen
-using QuantumLattices: ⊕, ⊗, add!, dtype, kind, matrix, update!
-using QuantumLattices: CompositeIndex, Hilbert, Index, Metric, OperatorUnitToTuple, Table, statistics
-using QuantumLattices: Parameters
-using QuantumLattices: Operator, OperatorSum, idtype
-using QuantumLattices: FID, Fock, FockTerm, Hopping, Hubbard, Onsite, Spin, SpinTerm
-using QuantumLattices: Lattice
-using QuantumLattices: contentnames, getcontent, parameternames
+using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, idtype, kind, matrix, parameternames, statistics, update!
+using QuantumLattices: AbelianNumber, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -48,19 +43,20 @@ end
     end
     @test eltype(bs) == eltype(typeof(bs)) == BinaryBasis{UInt}
     @test collect(bs) == map(BinaryBasis, [0, 1, 2, 3])
-    @test repr(bs) == "2^2"
-    @test string(bs) == "2^2:\n  0\n  1\n  10\n  11\n"
+    @test repr(bs) == "{2^2: ParticleNumber(NaN)}"
+    @test string(bs) == "{2^[1 2]: ParticleNumber(NaN)}"
 
     bs = BinaryBases(4, 2)
     @test collect(bs) == map(BinaryBasis, [3, 5, 6, 9, 10, 12])
-    @test repr(bs) == "C(4, 2)"
+    @test repr(bs) == "{2^4: ParticleNumber(2.0)}"
     for i = 1:length(bs)
         @test searchsortedfirst(bs[i], bs) == i
     end
 
-    bs = BinaryBases(1:2, 1) ⊗ BinaryBases(3:4, 1)
+    bs = BinaryBases{SpinfulParticle}(1:2, 1; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(3:4, 1; Sz=0.5)
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
-    @test repr(bs) == "C(2, 1) ⊗ C(2, 1)"
+    @test AbelianNumber(bs) == SpinfulParticle(2.0, 0.0)
+    @test repr(bs) == "{2^2: SpinfulParticle(1.0, -0.5)} ⊗ {2^2: SpinfulParticle(1.0, 0.5)}"
 end
 
 @testset "TargetSpace" begin
@@ -105,7 +101,7 @@ end
     @test getcontent(m, :id) == (m.bra, m.ket)
     @test getcontent(m, :value) == m.matrix
     @test dtype(m) == dtype(typeof(m)) == Float64
-    @test promote_type(typeof(m), ComplexF64) == EDMatrix{BinaryBases{BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{ComplexF64, Int}}
+    @test promote_type(typeof(m), ComplexF64) == EDMatrix{BinaryBases{ParticleNumber, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{ComplexF64, Int}}
 end
 
 @testset "EDMatrixRepresentation && SectorFilter" begin
@@ -114,7 +110,7 @@ end
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃
     target = BinaryBases(1:4, 1)⊕BinaryBases(1:4, 2)⊕BinaryBases(1:4, 3)
-    M = EDMatrix{BinaryBases{BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
+    M = EDMatrix{BinaryBases{ParticleNumber, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
 
     mr = EDMatrixRepresentation(target, table)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
