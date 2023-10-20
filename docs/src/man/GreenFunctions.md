@@ -2,7 +2,7 @@
 CurrentModule = ExactDiagonalization.GreenFunctions
 ```
 
-# Degrees of freedom
+# Green Functions
 
 ```@autodocs
 Modules = [GreenFunctions]

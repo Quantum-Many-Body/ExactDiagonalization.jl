@@ -2,7 +2,7 @@
 CurrentModule = ExactDiagonalization.CanonicalFockSystems
 ```
 
-# Degrees of freedom
+# Canonical Fermionic and Hard-core Bosonic Systems
 
 ```@autodocs
 Modules = [CanonicalFockSystems]

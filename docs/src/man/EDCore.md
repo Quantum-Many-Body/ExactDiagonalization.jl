@@ -2,7 +2,7 @@
 CurrentModule = ExactDiagonalization.EDCore
 ```
 
-# Degrees of freedom
+# Core of Exact Diagonalization
 
 ```@autodocs
 Modules = [EDCore]

@@ -2,7 +2,7 @@
 CurrentModule = ExactDiagonalization.CanonicalSpinSystems
 ```
 
-# Degrees of freedom
+# Canonical Spin Systems
 
 ```@autodocs
 Modules = [CanonicalSpinSystems]
