@@ -6,6 +6,12 @@ using QuantumLattices: AbelianNumber, CompositeIndex, FID, Fock, FockTerm, Hilbe
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
+    @test basistype(Int8(1)) == UInt8
+    @test basistype(Int16(1)) == UInt16
+    @test basistype(Int32(1)) == UInt32
+    @test basistype(Int64(1)) == UInt64
+    @test basistype(Int128(1)) == UInt128
+
     basis = BinaryBasis(5)
     @test basis==BinaryBasis((1, 3)) && isequal(basis, BinaryBasis{UInt}((1, 3)))
     @test basis<BinaryBasis(6) && isless(basis, BinaryBasis(6))
@@ -144,6 +150,10 @@ end
     @test Sector(hilbert, ParticleNumber(length(lattice))) == BinaryBases(2*length(lattice), length(lattice))
     @test Sector(hilbert, SpinfulParticle(length(lattice), 0.0)) == BinaryBases{SpinfulParticle}(1:length(lattice), length(lattice)÷2; Sz=-0.5)⊗BinaryBases{SpinfulParticle}(length(lattice)+1:2*length(lattice), length(lattice)÷2; Sz=+0.5)
     @test Sector(hilbert, SpinfulParticle(NaN, 0.5)) == BinaryBases([(BinaryBasis{UInt}(0b1111), SpinfulParticle(NaN, 0.5))], map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110]))
+
+    @test TargetSpace(hilbert) == TargetSpace(BinaryBases(2*length(lattice)))
+    @test TargetSpace(hilbert, ParticleNumber(length(lattice))) == TargetSpace(BinaryBases(2*length(lattice), length(lattice)))
+    @test TargetSpace(hilbert, ParticleNumber(length(lattice)-1), ParticleNumber(length(lattice)), ParticleNumber(length(lattice)+1)) == TargetSpace(hilbert, (ParticleNumber(length(lattice)-1), ParticleNumber(length(lattice)), ParticleNumber(length(lattice)+1)))
 
     t = Hopping(:t, 1.0, 1)
     U = Hubbard(:U, 0.0, modulate=true)

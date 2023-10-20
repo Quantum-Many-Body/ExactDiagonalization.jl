@@ -14,6 +14,6 @@ using .GreenFunctions
 export Sector, TargetSpace, ED, EDKind, EDMatrix, EDMatrixRepresentation, SectorFilter
 
 # CanonicalFockSystems
-export BinaryBases, BinaryBasis, BinaryBasisRange
+export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
 
 end # module

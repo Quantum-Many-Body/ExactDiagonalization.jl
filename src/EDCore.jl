@@ -208,7 +208,7 @@ end
 Construct a target space from the total Hilbert space and the associated quantum numbers.
 """
 @inline TargetSpace(hilbert::Hilbert; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(Sector(hilbert; table=table, kwargs...))
-@inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(Sector(hilbert, quantumnumbers...; table=table, kwargs...))
+@inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
 @inline TargetSpace(hilbert::Hilbert, quantumnumbers...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), quantumnumbers)...)
 
 """

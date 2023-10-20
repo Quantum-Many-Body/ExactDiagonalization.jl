@@ -9,7 +9,7 @@ using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
 import QuantumLattices: ⊗, matrix
 
-export BinaryBases, BinaryBasis, BinaryBasisRange, productable, sumable
+export BinaryBases, BinaryBasis, BinaryBasisRange, basistype, productable, sumable
 
 # Binary bases commonly used in canonical fermionic and hardcore bosonic quantum lattice systems
 @inline basistype(i::Integer) = basistype(typeof(i))
