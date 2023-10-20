@@ -22,15 +22,16 @@ lattice = Lattice(unitcell, (3, 4))
 # define the Hilbert space (single-orbital spin-1/2 complex fermion)
 hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
 
-# define the binary bases of the a half-filled system on the above cluster
-bases = BinaryBases(1:12, 6) ⊗ BinaryBases(13:24, 6)
+# define the quantum number of the sub-Hilbert space in which the computation to be carried out
+# here the particle number is set to be `length(lattice)` and Sz is set to be 0
+quantumnumber = SpinfulParticle(length(lattice), 0)
 
 # define the terms, i.e. the nearest-neighbor hopping and the Hubbard interaction
 t = Hopping(:t, -1.0, 1)
 U = Hubbard(:U, 8.0)
 
 # define the exact diagonalization algorithm for the Fermi Hubbard model
-ed = ED(lattice, hilbert, (t, U), TargetSpace(bases))
+ed = ED(lattice, hilbert, (t, U), quantumnumber)
 
 # find the ground state and its energy
 eigensystem = eigen(matrix(ed); nev=1)

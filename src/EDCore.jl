@@ -2,8 +2,8 @@ module EDCore
 
 using Arpack: eigs
 using LinearAlgebra: Eigen
-using QuantumLattices: expand, id, idtype, reparameter
-using QuantumLattices: AbstractLattice, Frontend, Image, LinearTransformation, MatrixRepresentation, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
+using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
+using QuantumLattices: AbstractLattice, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
 using SparseArrays: SparseMatrixCSC
 
 import LinearAlgebra: eigen
@@ -144,14 +144,8 @@ The kind of the exact diagonalization method applied to a quantum lattice system
 """
 struct EDKind{K} end
 @inline EDKind(K::Symbol) = EDKind{K}()
-@inline EDKind(::Type{T}) where {T<:Term} = error("EDKind error: not defined for $(kind(T)).")
-@inline @generated function EDKind(::Type{TS}) where {TS<:Tuple{Vararg{Term}}}
-    exprs = []
-    for i = 1:fieldcount(TS)
-        push!(exprs, :(typeof(EDKind(fieldtype(TS, $i)))))
-    end
-    return Expr(:call, Expr(:call, :reduce, :promote_type, Expr(:tuple, exprs...)))
-end
+@inline EDKind(hilbert::Hilbert) = EDKind(typeof(hilbert))
+@inline EDKind(::Type{H}) where {H<:Hilbert} = error("EDKind error: not defined.")
 
 """
     ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Frontend
@@ -204,6 +198,36 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
         eigvals, eigvecs = eigen(collect(m.matrix))
     end
     return Eigen(eigvals, eigvecs)
+end
+
+"""
+    TargetSpace(hilbert::Hilbert; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
+    TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
+    TargetSpace(hilbert::Hilbert, quantumnumbers...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
+
+Construct a target space from the total Hilbert space and the associated quantum numbers.
+"""
+@inline TargetSpace(hilbert::Hilbert; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(Sector(hilbert; table=table, kwargs...))
+@inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(Sector(hilbert, quantumnumbers...; table=table, kwargs...))
+@inline TargetSpace(hilbert::Hilbert, quantumnumbers...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), quantumnumbers)...)
+
+"""
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+
+Construct the exact diagonalization method for a canonical quantum Fock lattice system.
+"""
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    return ED(lattice, hilbert, terms, quantumnumbers; neighbors=neighbors, boundary=boundary, kwargs...)
+end
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    k = EDKind(hilbert)
+    table = Table(hilbert, Metric(k, hilbert))
+    targetspace = TargetSpace(hilbert, quantumnumbers; table=table, kwargs...)
+    isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
+    H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
+    mr = EDMatrixRepresentation(targetspace, table)
+    return ED{typeof(k)}(lattice, H, mr)
 end
 
 end # module

@@ -131,21 +131,25 @@ end
 end
 
 @testset "ED" begin
-    @test EDKind(FockTerm) == EDKind(:FED)
-    @test EDKind(SpinTerm) == EDKind(:SED)
-    @test EDKind(Tuple{Hopping, Onsite, Hubbard}) == EDKind(:FED)
+    @test EDKind(Hilbert{<:Fock}) == EDKind(:FED)
+    @test EDKind(Hilbert{<:Spin}) == EDKind(:SED)
 
     @test Metric(EDKind(:FED), Hilbert(1=>Fock{:f}(1, 2))) == OperatorUnitToTuple(:spin, :site, :orbital)
     @test Metric(EDKind(:SED), Hilbert(1=>Spin{1//2}())) == OperatorUnitToTuple(:site)
 
     lattice = Lattice([0.0], [1.0])
-    hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+
+    @test Sector(hilbert) == BinaryBases(2*length(lattice))
+    @test Sector(hilbert, ParticleNumber(length(lattice))) == BinaryBases(2*length(lattice), length(lattice))
+    @test Sector(hilbert, SpinfulParticle(length(lattice), 0.0)) == BinaryBases{SpinfulParticle}(1:length(lattice), length(lattice)÷2; Sz=-0.5)⊗BinaryBases{SpinfulParticle}(length(lattice)+1:2*length(lattice), length(lattice)÷2; Sz=+0.5)
+    @test Sector(hilbert, SpinfulParticle(NaN, 0.5)) == BinaryBases([(BinaryBasis{UInt}(0b1111), SpinfulParticle(NaN, 0.5))], map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110]))
+
     t = Hopping(:t, 1.0, 1)
     U = Hubbard(:U, 0.0, modulate=true)
     μ = Onsite(:μ, 0.0, modulate=true)
 
-    bases = BinaryBases(1:2, 1)⊗BinaryBases(3:4, 1)
-    ed = ED(lattice, hilbert, (t, U, μ), TargetSpace(bases))
+    ed = ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0); basistype=UInt8)
     @test kind(ed) == kind(typeof(ed)) == EDKind(:FED)
     @test valtype(ed) == valtype(typeof(ed)) == Float64
     @test statistics(ed) == statistics(typeof(ed)) == :f

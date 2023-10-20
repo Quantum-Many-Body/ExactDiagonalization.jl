@@ -2,16 +2,24 @@ module CanonicalFockSystems
 
 using Base.Iterators: product
 using Printf: @printf, @sprintf
-using QuantumLattices: plain, bonds, id, iscreation, periods, rank
-using QuantumLattices: AbstractLattice, AbelianNumber, Boundary, Combinations, DuplicatePermutations, Hilbert, Fock, FockTerm, Metric, Neighbors, Operator, OperatorGenerator, Operators, OperatorUnitToTuple, ParticleNumber, Table, Term, VectorSpace
+using QuantumLattices: id, iscreation, periods, rank, statistics
+using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
 using SparseArrays: SparseMatrixCSC, spzeros
 using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
-import QuantumLattices: ⊗, matrix, statistics
+import QuantumLattices: ⊗, matrix
 
 export BinaryBases, BinaryBasis, BinaryBasisRange, productable, sumable
 
 # Binary bases commonly used in canonical fermionic and hardcore bosonic quantum lattice systems
+@inline basistype(i::Integer) = basistype(typeof(i))
+@inline basistype(::Type{T}) where {T<:Unsigned} = T
+@inline basistype(::Type{Int8}) = UInt8
+@inline basistype(::Type{Int16}) = UInt16
+@inline basistype(::Type{Int32}) = UInt32
+@inline basistype(::Type{Int64}) = UInt64
+@inline basistype(::Type{Int128}) = UInt128
+
 """
     BinaryBasis{I<:Unsigned}
 
@@ -19,8 +27,9 @@ Binary basis represented by an unsigned integer.
 """
 struct BinaryBasis{I<:Unsigned}
     rep::I
-    BinaryBasis(i::Integer) = (rep = Unsigned(i); new{typeof(rep)}(rep))
+    BinaryBasis{I}(i::Integer) where {I<:Unsigned} = new{I}(convert(I, i))
 end
+@inline BinaryBasis(i::Integer) = (rep = Unsigned(i); BinaryBasis{typeof(rep)}(rep))
 @inline Base.:(==)(basis₁::BinaryBasis, basis₂::BinaryBasis) = basis₁.rep == basis₂.rep
 @inline Base.isequal(basis₁::BinaryBasis, basis₂::BinaryBasis) = isequal(basis₁.rep, basis₂.rep)
 @inline Base.:<(basis₁::BinaryBasis, basis₂::BinaryBasis) = basis₁.rep < basis₂.rep
@@ -105,7 +114,7 @@ Get the direct product of two binary bases.
 
 Construct a binary basis with the given occupied orbitals.
 """
-@inline BinaryBasis(states; filter=index->true) = BinaryBasis{typeof(Unsigned(first(states)))}(states; filter=filter)
+@inline BinaryBasis(states; filter=index->true) = BinaryBasis{basistype(eltype(states))}(states; filter=filter)
 function BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
     rep, eye = zero(I), one(I)
     for (index, state) in enumerate(states)
@@ -164,7 +173,7 @@ end
 
 Get the Abelian quantum number of a set of binary bases.
 """
-AbelianNumber(bs::BinaryBases) = sum(rep->rep[2], bs.id)
+@inline AbelianNumber(bs::BinaryBases) = sum(rep->rep[2], bs.id)
 
 """
     ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
@@ -205,48 +214,54 @@ Strictly speaking, two sets of binary bases could be direct summed if and only i
 @inline sumable(bs₁::BinaryBases, bs₂::BinaryBases) = true
 
 """
-    BinaryBases(nstate::Integer)
     BinaryBases(states)
-    BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
+    BinaryBases(nstate::Integer)
     BinaryBases{A}(states) where {A<:AbelianNumber}
+    BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
 
 Construct a set of binary bases that subject to no quantum number conservation.
 """
-@inline BinaryBases(nstate::Integer) = BinaryBases{ParticleNumber}(nstate)
-@inline BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber} = BinaryBases([(BinaryBasis(1:nstate), A(map(p->NaN, periods(A))...))], BinaryBasisRange(UInt(0):UInt(2^nstate-1)))
-@inline BinaryBases(states) = BinaryBases{ParticleNumber}(states)
-@inline BinaryBases{A}(states) where {A<:AbelianNumber} = BinaryBases{A}(Tuple(states))
-function BinaryBases{A}(states::NTuple{N, Integer}) where {A<:AbelianNumber, N}
-    states = NTuple{N, eltype(states)}(sort!(collect(states); rev=true))
-    com = DuplicatePermutations{N}((false, true))
-    table = Vector{BinaryBasis{typeof(Unsigned(first(states)))}}(undef, length(com))
-    for (i, poses) in enumerate(com)
-        table[i] = BinaryBasis(states; filter=index->poses[index])
+@inline BinaryBases(argument) = BinaryBases{ParticleNumber}(argument)
+function BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
+    id = [(BinaryBasis(one(nstate):nstate), A(map(p->NaN, periods(A))...))]
+    table = BinaryBasisRange(zero(basistype(nstate)):basistype(nstate)(2^nstate-1))
+    return BinaryBases(id, table)
+end
+function BinaryBases{A}(states) where {A<:AbelianNumber}
+    id = [(BinaryBasis(states), A(map(p->NaN, periods(A))...))]
+    table = BinaryBasis{basistype(eltype(states))}[]
+    table = table!(table, NTuple{length(states), basistype(eltype(states))}(sort!(collect(states); rev=true)))
+    return BinaryBases(id, table)
+end
+function table!(table, states::NTuple{N}) where N
+    for poses in DuplicatePermutations{N}((false, true))
+        push!(table, BinaryBasis(states; filter=index->poses[index]))
     end
-    return BinaryBases([(BinaryBasis(states), A(map(p->NaN, periods(A))...))], table)
+    return table
 end
 
 """
-    BinaryBases(nstate::Integer, nparticle::Integer)
     BinaryBases(states, nparticle::Integer)
-    BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
+    BinaryBases(nstate::Integer, nparticle::Integer)
     BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
+    BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
 
 Construct a set of binary bases that preserves the particle number conservation.
 """
-@inline BinaryBases(nstate::Integer, nparticle::Integer) = BinaryBases{ParticleNumber}(nstate, nparticle)
-@inline BinaryBases(states, nparticle::Integer) = BinaryBases{ParticleNumber}(states, nparticle)
-@inline BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(1:nstate, Val(nparticle); kwargs...)
-@inline BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(states, Val(nparticle); kwargs...)
-function BinaryBases{A}(states, ::Val{N}; kwargs...) where {A<:AbelianNumber, N}
-    com = Combinations{N}(sort!(collect(states); rev=true))
-    I = typeof(Unsigned(first(states)))
-    table = Vector{BinaryBasis{I}}(undef, length(com))
-    for (i, poses) in enumerate(com)
-        table[end+1-i] = BinaryBasis{I}(poses)
+@inline BinaryBases(argument, nparticle::Integer) = BinaryBases{ParticleNumber}(argument, nparticle)
+@inline BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(one(nstate):nstate, nparticle; kwargs...)
+function BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
+    kwargs = (kwargs..., N=nparticle)
+    id = [(BinaryBasis(states), A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...))]
+    table = BinaryBasis{basistype(eltype(states))}[]
+    table!(table, NTuple{length(states), basistype(eltype(states))}(sort!(collect(states); rev=true)), Val(nparticle))
+    return BinaryBases(id, table)
+end
+function table!(table, states::Tuple, ::Val{N}) where N
+    for poses in Combinations{N}(states)
+        push!(table, BinaryBasis{eltype(states)}(poses))
     end
-    kwargs = (kwargs..., N=N)
-    return BinaryBases([(BinaryBasis{I}(states), A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...))], table)
+    return reverse!(table)
 end
 
 # CSC-formed sparse matrix representation of an operator
@@ -297,11 +312,11 @@ function matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=val
 end
 
 """
-    EDKind(::Type{<:FockTerm})
+    EDKind(::Type{<:Hilbert{<:Fock}})
 
 The kind of the exact diagonalization method applied to a canonical quantum Fock lattice system.
 """
-@inline EDKind(::Type{<:FockTerm}) = EDKind(:FED)
+@inline EDKind(::Type{<:Hilbert{<:Fock}}) = EDKind(:FED)
 
 """
     Metric(::EDKind{:FED}, ::Hilbert{<:Fock}) -> OperatorUnitToTuple
@@ -311,16 +326,38 @@ Get the index-to-tuple metric for a canonical quantum Fock lattice system.
 @inline @generated Metric(::EDKind{:FED}, ::Hilbert{<:Fock}) = OperatorUnitToTuple(:spin, :site, :orbital)
 
 """
-    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain)
+    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Nothing=nothing; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
 
-Construct the exact diagonalization method for a canonical quantum Fock lattice system.
+Construct the binary bases of a Hilbert space with the specified quantum number.
 """
-function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, targetspace::TargetSpace; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain)
-    k = EDKind(typeof(terms))
-    isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
-    H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
-    mr = EDMatrixRepresentation(targetspace, Table(hilbert, Metric(k, hilbert)))
-    return ED{typeof(k)}(lattice, H, mr)
+function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Nothing=nothing; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
+    states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
+    return BinaryBases(states)
+end
+function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
+    @assert !isnan(quantumnumber.N) "Sector error: particle number is NaN."
+    states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
+    return BinaryBases{ParticleNumber}(states, Int(quantumnumber.N))
+end
+function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
+    @assert all(internal->internal.nspin==2, values(hilbert)) "Sector error: only for spin-1/2 systems."
+    @assert !isnan(quantumnumber.Sz) "Sector error: Sz is NaN."
+    spindws = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==-1//2)
+    spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
+    if isnan(quantumnumber.N)
+        id = [(BinaryBasis([spindws..., spinups...]), quantumnumber)]
+        table = BinaryBasis{basistype}[]
+        for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
+            ndw = nup-Int(2*quantumnumber.Sz)
+            append!(table, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
+        end
+        return BinaryBases(id, sort!(table)::Vector{BinaryBasis{basistype}})
+    else
+        ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
+        return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5)
+    end
 end
 
 end # module

@@ -6,7 +6,6 @@ DocMeta.setdocmeta!(ExactDiagonalization, :DocTestSetup, :(using ExactDiagonaliz
 makedocs(;
     modules=[ExactDiagonalization],
     authors="waltergu <waltergu1989@gmail.com> and contributors",
-    repo="https://github.com/Quantum-Many-Body/ExactDiagonalization.jl/blob/{commit}{path}#{line}",
     sitename="ExactDiagonalization.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
@@ -18,8 +17,14 @@ makedocs(;
         "Examples" => [
             "examples/Introduction.md",
             "examples/HubbardModel.md",
-            ]
+        ],
+        "Manual" => [
+            "man/EDCore.md",
+            "man/CanonicalFockSystems.md",
+            "man/CanonicalSpinSystems.md",
+            "man/GreenFunctions.md",
         ]
+    ]
 )
 
 deploydocs(;

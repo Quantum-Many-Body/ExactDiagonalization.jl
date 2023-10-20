@@ -22,9 +22,3 @@ pkg> add ExactDiagonalization
 
 ## Python counterpart
 [HamiltonianPy](https://github.com/waltergu/HamiltonianPy): in fact, the authors of this Julia package worked on the python package at first and only turned to Julia later.
-
-## Manuals
-
-```@autodocs
-Modules = [ExactDiagonalization]
-```

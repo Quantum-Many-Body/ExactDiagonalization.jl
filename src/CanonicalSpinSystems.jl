@@ -1,14 +1,14 @@
 module CanonicalSpinSystems
 
-using QuantumLattices: Hilbert, Metric, OperatorUnitToTuple, Spin, SpinTerm
+using QuantumLattices: Hilbert, Metric, OperatorUnitToTuple, Spin
 using ..EDCore: EDKind
 
 """
-    EDKind(::Type{<:SpinTerm})
+    EDKind(::Type{<:Hilbert{<:Spin}})
 
 The kind of the exact diagonalization method applied to a canonical quantum spin lattice system.
 """
-@inline EDKind(::Type{<:SpinTerm}) = EDKind(:SED)
+@inline EDKind(::Type{<:Hilbert{<:Spin}}) = EDKind(:SED)
 
 """
     Metric(::EDKind{:SED}, ::Hilbert{<:Spin}) -> OperatorUnitToTuple
