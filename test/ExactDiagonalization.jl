@@ -29,9 +29,9 @@ using SparseArrays: SparseMatrixCSC
 end
 
 @testset "BinaryBasisRange" begin
-    bbr = BinaryBasisRange(UInt(0):UInt(4))
+    bbr = BinaryBasisRange(2)
     @test issorted(bbr) == true
-    @test length(bbr) == 5
+    @test length(bbr) == 4
     for i = 1:length(bbr)
         @test bbr[i] == BinaryBasis(UInt(i-1))
     end
@@ -49,12 +49,11 @@ end
     end
     @test eltype(bs) == eltype(typeof(bs)) == BinaryBasis{UInt}
     @test collect(bs) == map(BinaryBasis, [0, 1, 2, 3])
-    @test repr(bs) == "{2^2: ParticleNumber(NaN)}"
-    @test string(bs) == "{2^[1 2]: ParticleNumber(NaN)}"
+    @test string(bs) == "{2^1:2}"
 
     bs = BinaryBases(4, 2)
     @test collect(bs) == map(BinaryBasis, [3, 5, 6, 9, 10, 12])
-    @test repr(bs) == "{2^4: ParticleNumber(2.0)}"
+    @test string(bs) == "{2^[1 2 3 4]: ParticleNumber(2.0)}"
     for i = 1:length(bs)
         @test searchsortedfirst(bs[i], bs) == i
     end
@@ -62,7 +61,7 @@ end
     bs = BinaryBases{SpinfulParticle}(1:2, 1; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(3:4, 1; Sz=0.5)
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
     @test AbelianNumber(bs) == SpinfulParticle(2.0, 0.0)
-    @test repr(bs) == "{2^2: SpinfulParticle(1.0, -0.5)} ⊗ {2^2: SpinfulParticle(1.0, 0.5)}"
+    @test string(bs) == "{2^[1 2]: SpinfulParticle(1.0, -0.5)} ⊗ {2^[3 4]: SpinfulParticle(1.0, 0.5)}"
 end
 
 @testset "TargetSpace" begin
@@ -147,9 +146,12 @@ end
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
 
     @test Sector(hilbert) == BinaryBases(2*length(lattice))
+    @test Sector(hilbert, ParticleNumber(NaN)) == BinaryBases(1:2*length(lattice))
     @test Sector(hilbert, ParticleNumber(length(lattice))) == BinaryBases(2*length(lattice), length(lattice))
-    @test Sector(hilbert, SpinfulParticle(length(lattice), 0.0)) == BinaryBases{SpinfulParticle}(1:length(lattice), length(lattice)÷2; Sz=-0.5)⊗BinaryBases{SpinfulParticle}(length(lattice)+1:2*length(lattice), length(lattice)÷2; Sz=+0.5)
+    @test Sector(hilbert, SpinfulParticle(NaN, NaN)) == BinaryBases{SpinfulParticle}(1:2*length(lattice))
+    @test Sector(hilbert, SpinfulParticle(length(lattice), NaN)) == BinaryBases{SpinfulParticle}(2*length(lattice), length(lattice); Sz=NaN)
     @test Sector(hilbert, SpinfulParticle(NaN, 0.5)) == BinaryBases([(BinaryBasis{UInt}(0b1111), SpinfulParticle(NaN, 0.5))], map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110]))
+    @test Sector(hilbert, SpinfulParticle(length(lattice), 0.0)) == BinaryBases{SpinfulParticle}(1:length(lattice), length(lattice)÷2; Sz=-0.5)⊗BinaryBases{SpinfulParticle}(length(lattice)+1:2*length(lattice), length(lattice)÷2; Sz=+0.5)
 
     @test TargetSpace(hilbert) == TargetSpace(BinaryBases(2*length(lattice)))
     @test TargetSpace(hilbert, ParticleNumber(length(lattice))) == TargetSpace(BinaryBases(2*length(lattice), length(lattice)))

@@ -1,7 +1,7 @@
 module CanonicalFockSystems
 
 using Base.Iterators: product
-using Printf: @printf, @sprintf
+using Printf: @printf
 using QuantumLattices: id, iscreation, periods, rank, statistics
 using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
 using SparseArrays: SparseMatrixCSC, spzeros
@@ -126,10 +126,11 @@ end
 """
     BinaryBasisRange{I<:Unsigned} <: VectorSpace{BinaryBasis{I}}
 
-A continuous range of binary basis.
+A continuous range of binary basis from 0 to 2^n-1.
 """
 struct BinaryBasisRange{I<:Unsigned} <: VectorSpace{BinaryBasis{I}}
     slice::UnitRange{I}
+    BinaryBasisRange(nstate::Integer) = new{basistype(nstate)}(zero(basistype(nstate)):basistype(nstate)(2^nstate-1))
 end
 @inline Base.issorted(::BinaryBasisRange) = true
 @inline Base.length(bbr::BinaryBasisRange) = length(bbr.slice)
@@ -152,13 +153,6 @@ end
 @inline Base.eltype(bs::BinaryBases) = eltype(typeof(bs))
 @inline Base.eltype(::Type{<:BinaryBases{<:AbelianNumber, B}}) where {B<:BinaryBasis} = B
 @inline Base.iterate(bs::BinaryBases, state=1) = state>length(bs) ? nothing : (bs.table[state], state+1)
-function Base.repr(bs::BinaryBases)
-    result = String[]
-    for (states, qn) in bs.id
-        push!(result, @sprintf "{2^%s: %s}" count(states) qn)
-    end
-    return join(result, " ⊗ ")
-end
 function Base.show(io::IO, bs::BinaryBases)
     for (i, (states, qn)) in enumerate(bs.id)
         @printf io "{2^[%s]: %s}" join(collect(states), " ") qn
@@ -166,6 +160,12 @@ function Base.show(io::IO, bs::BinaryBases)
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)
+function Base.show(io::IO, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange})
+    for (i, (states, qn)) in enumerate(bs.id)
+        @printf io "{2^1:%s}" maximum(collect(states))
+        i<length(bs.id) && @printf io "%s" " ⊗ "
+    end
+end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
 
 """
@@ -224,7 +224,7 @@ Construct a set of binary bases that subject to no quantum number conservation.
 @inline BinaryBases(argument) = BinaryBases{ParticleNumber}(argument)
 function BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
     id = [(BinaryBasis(one(nstate):nstate), A(map(p->NaN, periods(A))...))]
-    table = BinaryBasisRange(zero(basistype(nstate)):basistype(nstate)(2^nstate-1))
+    table = BinaryBasisRange(nstate)
     return BinaryBases(id, table)
 end
 function BinaryBases{A}(states) where {A<:AbelianNumber}
@@ -326,37 +326,45 @@ Get the index-to-tuple metric for a canonical quantum Fock lattice system.
 @inline @generated Metric(::EDKind{:FED}, ::Hilbert{<:Fock}) = OperatorUnitToTuple(:spin, :site, :orbital)
 
 """
-    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Nothing=nothing; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}; basistype=UInt, kwargs...) -> BinaryBases
     Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
     Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
 
 Construct the binary bases of a Hilbert space with the specified quantum number.
 """
-function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Nothing=nothing; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
-    states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
-    return BinaryBases(states)
-end
+@inline Sector(hilbert::Hilbert{<:Fock}; basistype=UInt, kwargs...) = BinaryBases(basistype(sum([length(internal)÷2 for internal in values(hilbert)])))
 function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
-    @assert !isnan(quantumnumber.N) "Sector error: particle number is NaN."
     states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
-    return BinaryBases{ParticleNumber}(states, Int(quantumnumber.N))
+    if isnan(quantumnumber.N)
+        return BinaryBases{ParticleNumber}(states)
+    else
+        return BinaryBases{ParticleNumber}(states, Int(quantumnumber.N))
+    end
 end
 function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
     @assert all(internal->internal.nspin==2, values(hilbert)) "Sector error: only for spin-1/2 systems."
-    @assert !isnan(quantumnumber.Sz) "Sector error: Sz is NaN."
-    spindws = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==-1//2)
-    spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
-    if isnan(quantumnumber.N)
-        id = [(BinaryBasis([spindws..., spinups...]), quantumnumber)]
-        table = BinaryBasis{basistype}[]
-        for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
-            ndw = nup-Int(2*quantumnumber.Sz)
-            append!(table, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
+    if isnan(quantumnumber.Sz)
+        states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
+        if isnan(quantumnumber.N)
+            return BinaryBases{SpinfulParticle}(states)
+        else
+            return BinaryBases{SpinfulParticle}(states, Int(quantumnumber.N); Sz=NaN)
         end
-        return BinaryBases(id, sort!(table)::Vector{BinaryBasis{basistype}})
     else
-        ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
-        return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5)
+        spindws = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==-1//2)
+        spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
+        if isnan(quantumnumber.N)
+            id = [(BinaryBasis([spindws..., spinups...]), quantumnumber)]
+            table = BinaryBasis{basistype}[]
+            for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
+                ndw = nup-Int(2*quantumnumber.Sz)
+                append!(table, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
+            end
+            return BinaryBases(id, sort!(table)::Vector{BinaryBasis{basistype}})
+        else
+            ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
+            return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5)
+        end
     end
 end
 

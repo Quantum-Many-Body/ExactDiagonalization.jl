@@ -201,29 +201,29 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 end
 
 """
-    TargetSpace(hilbert::Hilbert; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
+    TargetSpace(hilbert::Hilbert; kwargs...)
     TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
     TargetSpace(hilbert::Hilbert, quantumnumbers...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
 
 Construct a target space from the total Hilbert space and the associated quantum numbers.
 """
-@inline TargetSpace(hilbert::Hilbert; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(Sector(hilbert; table=table, kwargs...))
+@inline TargetSpace(hilbert::Hilbert; kwargs...) = TargetSpace(Sector(hilbert; kwargs...))
 @inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
 @inline TargetSpace(hilbert::Hilbert, quantumnumbers...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), quantumnumbers)...)
 
 """
-    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
     ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
 
 Construct the exact diagonalization method for a canonical quantum Fock lattice system.
 """
-function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
-    return ED(lattice, hilbert, terms, quantumnumbers; neighbors=neighbors, boundary=boundary, kwargs...)
-end
 function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    return ED(lattice, hilbert, terms, quantumnumbers...; neighbors=neighbors, boundary=boundary, kwargs...)
+end
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
     k = EDKind(hilbert)
     table = Table(hilbert, Metric(k, hilbert))
-    targetspace = TargetSpace(hilbert, quantumnumbers; table=table, kwargs...)
+    targetspace = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
     H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
     mr = EDMatrixRepresentation(targetspace, table)
