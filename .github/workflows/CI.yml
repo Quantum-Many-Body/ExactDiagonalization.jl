@@ -52,9 +52,7 @@ jobs:
           julia --project=docs -e '
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
-            Pkg.instantiate()
-            ENV["PYTHON"]=""
-            Pkg.build("PyCall")'
+            Pkg.instantiate()'
       - run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
