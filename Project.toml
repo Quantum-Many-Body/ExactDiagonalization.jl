@@ -12,5 +12,8 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 Arpack = "0.5"
+LinearAlgebra = "1.8 - 1"
+Printf = "1.8 - 1"
 QuantumLattices = "0.9.10"
+SparseArrays = "1.8 - 1"
 julia = "1.8 - 1.9"
