@@ -3,13 +3,16 @@ module EDCore
 using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization
 using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
-using QuantumLattices: AbelianNumber, AbstractLattice, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
+using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
 using SparseArrays: SparseMatrixCSC
+using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
 import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, kind, matrix, parameternames, statistics, update!
 
-export ED, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace
+export edtimer, ED, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace
+
+const edtimer = TimerOutput()
 
 """
     abstract type Sector <: OperatorUnit
@@ -140,25 +143,30 @@ end
 @inline Base.iterate(content::EDEigen, ::Val{:done}) = nothing
 
 """
-    eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
+    eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[], timer::TimerOutput=edtimer)
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
-@inline function eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
-    isa(v₀, AbstractVector) && (v₀ = Dict(m.ket=>v₀ for m in ms))
-    isa(v₀, Dict{<:AbelianNumber, <:AbstractVector}) && (v₀ = Dict(m.ket=>get(v₀, AbelianNumber(m.ket), dtype(eltype(ms))[]) for m in ms))
-    values, vectors, sectors = real(dtype(eltype(ms)))[], Vector{dtype(eltype(ms))}[], eltype(idtype(eltype(ms)))[]
-    for m in ms
-        k = min(length(m.ket), nev)
-        eigensystem = eigen(m; nev=k, which=:SR, tol=tol, maxiter=maxiter, v₀=get(v₀, m.ket, dtype(eltype(ms))[]))
-        for i = 1:k
-            push!(values, eigensystem.values[i])
-            push!(vectors, eigensystem.vectors[:, i])
-            push!(sectors, m.ket)
+@inline function eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[], timer::TimerOutput=edtimer)
+    @timeit timer "eigen" begin
+        isa(v₀, AbstractVector) && (v₀ = Dict(m.ket=>v₀ for m in ms))
+        isa(v₀, Dict{<:AbelianNumber, <:AbstractVector}) && (v₀ = Dict(m.ket=>get(v₀, AbelianNumber(m.ket), dtype(eltype(ms))[]) for m in ms))
+        values, vectors, sectors = real(dtype(eltype(ms)))[], Vector{dtype(eltype(ms))}[], eltype(idtype(eltype(ms)))[]
+        for m in ms
+            @timeit timer string(AbelianNumber(m.ket)) begin
+                k = min(length(m.ket), nev)
+                eigensystem = eigen(m; nev=k, which=:SR, tol=tol, maxiter=maxiter, v₀=get(v₀, m.ket, dtype(eltype(ms))[]))
+                for i = 1:k
+                    push!(values, eigensystem.values[i])
+                    push!(vectors, eigensystem.vectors[:, i])
+                    push!(sectors, m.ket)
+                end
+            end
         end
+        perm = sortperm(values)[1:min(nev, length(values))]
+        result = EDEigen(values[perm], vectors[perm], sectors[perm])
     end
-    perm = sortperm(values)
-    return EDEigen(values[perm], vectors[perm], sectors[perm])
+    return result
 end
 
 """
@@ -222,8 +230,10 @@ struct ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Fron
     lattice::L
     H::G
     Hₘ::M
-    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation) where K
-        Hₘ = mr(H)
+    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer) where K
+        @timeit timer "matrix" begin
+            @timeit timer "prepare" Hₘ = mr(H)
+        end
         new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
 end
@@ -242,41 +252,57 @@ end
 @inline Parameters(ed::ED) = Parameters(ed.H)
 
 """
-    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple{Vararg{AbelianNumber}}; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
-    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::AbelianNumber...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple{Vararg{AbelianNumber}}; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, timer::TimerOutput=edtimer, kwargs...)
+    ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::AbelianNumber...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, timer::TimerOutput=edtimer, kwargs...)
 
 Construct the exact diagonalization method for a canonical quantum Fock lattice system.
 """
-function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple{Vararg{AbelianNumber}}; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
-    return ED(lattice, hilbert, terms, quantumnumbers...; neighbors=neighbors, boundary=boundary, kwargs...)
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::Tuple{Vararg{AbelianNumber}}; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, timer::TimerOutput=edtimer, kwargs...)
+    return ED(lattice, hilbert, terms, quantumnumbers...; neighbors=neighbors, boundary=boundary, timer=timer, kwargs...)
 end
-function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::AbelianNumber...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, kwargs...)
+function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::AbelianNumber...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, timer::TimerOutput=edtimer, kwargs...)
     k = EDKind(hilbert)
     table = Table(hilbert, Metric(k, hilbert))
     targetspace = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
     H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
     mr = EDMatrixRepresentation(targetspace, table)
-    return ED{typeof(k)}(lattice, H, mr)
+    return ED{typeof(k)}(lattice, H, mr; timer=timer)
 end
 
 """
-    matrix(ed::ED, sectors::Union{AbelianNumber, Sector}...; kwargs...) -> OperatorSum{<:EDMatrix}
+    matrix(ed::ED, sectors::Union{AbelianNumber, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> OperatorSum{<:EDMatrix}
+    matrix(ed::Algorithm{<:ED}, sectors::Union{AbelianNumber, Sector}...; kwargs...) -> OperatorSum{<:EDMatrix}
 
 Get the sparse matrix representation of a quantum lattice system in the target space.
 """
-@inline matrix(ed::ED; kwargs...) = expand(ed.Hₘ)
-@inline matrix(ed::ED, sectors::Sector...; kwargs...) = expand(SectorFilter(sectors...)(ed.Hₘ))
-function matrix(ed::ED, quantumnumbers::AbelianNumber...; kwargs...)
+function matrix(ed::ED; timer::TimerOutput=edtimer, kwargs...)
+    @timeit timer "matrix" begin
+        @timeit timer "expand" (result = expand(ed.Hₘ))
+    end
+    return result
+end
+function matrix(ed::ED, sectors::Sector...; timer::TimerOutput=edtimer, kwargs...)
+    @timeit timer "matrix" begin
+        @timeit timer "expand" (result = expand(SectorFilter(sectors...)(ed.Hₘ)))
+    end
+    return result
+end
+function matrix(ed::ED, quantumnumbers::AbelianNumber...; timer::TimerOutput=edtimer, kwargs...)
     sectors = [braket[1] for braket in ed.Hₘ.transformation.brakets if AbelianNumber(braket[1]) in quantumnumbers]
-    return matrix(ed, sectors...; kwargs...)
+    return matrix(ed, sectors...; timer=timer, kwargs...)
+end
+function matrix(ed::Algorithm{<:ED}, sectors::Union{AbelianNumber, Sector}...; kwargs...)
+    return matrix(ed.frontend, sectors...; timer=ed.timer, kwargs...)
 end
 
 """
-    eigen(ed::ED, sectors::Union{AbelianNumber, Sector}...; kwargs...) -> EDEigen
+    eigen(ed::ED, sectors::Union{AbelianNumber, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> EDEigen
+    eigen(ed::Algorithm{<:ED}, sectors::Union{AbelianNumber, Sector}...; kwargs...) -> EDEigen
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
-@inline eigen(ed::ED, sectors::Union{AbelianNumber, Sector}...; kwargs...) = eigen(matrix(ed, sectors...); kwargs...)
+@inline eigen(ed::ED, sectors::Union{AbelianNumber, Sector}...; timer::TimerOutput=edtimer, kwargs...) = eigen(matrix(ed, sectors...; timer=timer); timer=timer, kwargs...)
+@inline eigen(ed::Algorithm{<:ED}, sectors::Union{AbelianNumber, Sector}...; kwargs...) = eigen(matrix(ed, sectors...; timer=ed.timer); timer=ed.timer, kwargs...)
 
 end # module

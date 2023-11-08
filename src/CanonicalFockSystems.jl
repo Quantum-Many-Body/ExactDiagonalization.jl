@@ -364,7 +364,7 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=
             return BinaryBases(id, sort!(table)::Vector{BinaryBasis{basistype}})
         else
             ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
-            return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5)
+            return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5*ndw) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5*nup)
         end
     end
 end

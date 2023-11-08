@@ -2,7 +2,7 @@ using ExactDiagonalization
 using ExactDiagonalization: sumable, productable
 using LinearAlgebra: eigen
 using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, idtype, kind, matrix, parameternames, statistics, update!
-using QuantumLattices: AbelianNumber, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
+using QuantumLattices: AbelianNumber, Algorithm, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -162,10 +162,10 @@ end
     U = Hubbard(:U, 0.0, modulate=true)
     μ = Onsite(:μ, 0.0, modulate=true)
 
-    ed = ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0); basistype=UInt8)
-    @test kind(ed) == kind(typeof(ed)) == EDKind(:FED)
-    @test valtype(ed) == valtype(typeof(ed)) == Float64
-    @test statistics(ed) == statistics(typeof(ed)) == :f
+    ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0); basistype=UInt8))
+    @test kind(ed.frontend) == kind(typeof(ed.frontend)) == EDKind(:FED)
+    @test valtype(ed.frontend) == valtype(typeof(ed.frontend)) == Float64
+    @test statistics(ed.frontend) == statistics(typeof(ed.frontend)) == :f
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
     vector = [0.5, -0.5, -0.5, 0.5]
