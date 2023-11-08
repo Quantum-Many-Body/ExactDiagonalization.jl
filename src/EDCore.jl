@@ -140,11 +140,11 @@ end
 @inline Base.iterate(content::EDEigen, ::Val{:done}) = nothing
 
 """
-    eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=6, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
+    eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
-@inline function eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=6, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
+@inline function eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[])
     isa(v₀, AbstractVector) && (v₀ = Dict(m.ket=>v₀ for m in ms))
     isa(v₀, Dict{<:AbelianNumber, <:AbstractVector}) && (v₀ = Dict(m.ket=>get(v₀, AbelianNumber(m.ket), dtype(eltype(ms))[]) for m in ms))
     values, vectors, sectors = real(dtype(eltype(ms)))[], Vector{dtype(eltype(ms))}[], eltype(idtype(eltype(ms)))[]
