@@ -170,12 +170,14 @@ end
 
     vector = [0.5, -0.5, -0.5, 0.5]
     eigensystem = eigen(ed; nev=1)
+    values, vectors, sectors = eigensystem
+    @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
     vector = [-0.43516214649359913, 0.5573454101893041, 0.5573454101893037, -0.43516214649359913]
     update!(ed, U=1.0, μ=-0.5)
-    eigensystem = eigen(ed; nev=1)
+    eigensystem = eigen(ed, SpinfulParticle(length(lattice), 0.0); nev=1)
     @test isapprox(eigensystem.values[1], -2.5615528128088303; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 end
