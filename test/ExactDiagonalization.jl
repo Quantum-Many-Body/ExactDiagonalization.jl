@@ -41,8 +41,9 @@ end
     bs = BinaryBases(2)
     @test issorted(bs) == true
     @test length(bs) == length(bs) == 4
-    @test bs==BinaryBases(1:2)
+    @test bs == BinaryBases(1:2)
     @test isequal(bs, BinaryBases((2, 1)))
+    @test hash(bs, UInt(1)) == hash(bs.id, UInt(1))
     for i = 1:length(bs)
         @test bs[i]==BinaryBasis(i-1)
         @test searchsortedfirst(bs[i], bs) == i
@@ -167,14 +168,14 @@ end
     @test statistics(ed) == statistics(typeof(ed)) == :f
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
-    vector = [0.5; -0.5; -0.5; 0.5]
-    eigensystem = eigen(matrix(ed); nev=1)
-    @test isapprox(eigensystem.values, [-2.0]; atol=10^-10)
-    @test isapprox(eigensystem.vectors, vector; atol=10^-10) || isapprox(eigensystem.vectors, -vector; atol=10^-10)
+    vector = [0.5, -0.5, -0.5, 0.5]
+    eigensystem = eigen(ed; nev=1)
+    @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
+    @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    vector = [-0.43516214649359913; 0.5573454101893041; 0.5573454101893037; -0.43516214649359913]
+    vector = [-0.43516214649359913, 0.5573454101893041, 0.5573454101893037, -0.43516214649359913]
     update!(ed, U=1.0, μ=-0.5)
-    eigensystem = eigen(matrix(ed); nev=1)
-    @test isapprox(eigensystem.values, [-2.5615528128088303]; atol=10^-10)
-    @test isapprox(eigensystem.vectors, vector; atol=10^-10) || isapprox(eigensystem.vectors, -vector; atol=10^-10)
+    eigensystem = eigen(ed; nev=1)
+    @test isapprox(eigensystem.values[1], -2.5615528128088303; atol=10^-10)
+    @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 end

@@ -34,7 +34,7 @@ U = Hubbard(:U, 8.0)
 ed = ED(lattice, hilbert, (t, U), quantumnumber)
 
 # find the ground state and its energy
-eigensystem = eigen(matrix(ed); nev=1)
+eigensystem = eigen(ed; nev=1)
 
 # Ground state energy should be -4.913259209075605
 print(eigensystem.values)

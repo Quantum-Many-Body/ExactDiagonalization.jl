@@ -145,6 +145,7 @@ struct BinaryBases{A<:AbelianNumber, B<:BinaryBasis, T<:AbstractVector{B}} <: Se
     id::Vector{Tuple{B, A}}
     table::T
 end
+@inline Base.hash(bs::BinaryBases, h::UInt) = hash(bs.id, h)
 @inline Base.issorted(::BinaryBases) = true
 @inline Base.length(bs::BinaryBases) = length(bs.table)
 @inline Base.:(==)(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
