@@ -2,16 +2,21 @@ module EDCore
 
 using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization
-using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
+using QuantumLattices: plain, bonds, expand, idtype, reparameter
 using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
 using SparseArrays: SparseMatrixCSC
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
-import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, kind, matrix, parameternames, statistics, update!
+import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, id, kind, matrix, parameternames, statistics, update!
 
-export edtimer, ED, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace
+export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace, productable, sumable
 
+"""
+    const edtimer = TimerOutput()
+
+The default shared timer for all exact diagonalization methods.
+"""
 const edtimer = TimerOutput()
 
 """
@@ -20,6 +25,24 @@ const edtimer = TimerOutput()
 A sector of the Hilbert space which forms the bases of an irreducible representation of the Hamiltonian of a quantum lattice system.
 """
 abstract type Sector <: OperatorUnit end
+@inline id(sector::Sector) = getfield(sector, :id)
+@inline Base.hash(sector::Sector, h::UInt) = hash(id(sector), h)
+@inline Base.:(==)(sector₁::Sector, sector₂::Sector) = isequal(id(sector₁), id(sector₂))
+@inline Base.isequal(sector₁::Sector, sector₂::Sector) = isequal(id(sector₁), id(sector₂))
+
+"""
+    sumable(sector₁::Sector, sector₂::Sector) -> Bool
+
+Judge whether two sectors could be direct summed.
+"""
+function sumable end
+
+"""
+    productable(sector₁::Sector, sector₂::Sector) -> Bool
+
+Judge whether two sectors could be direct producted.
+"""
+function productable end
 
 """
     TargetSpace{S<:Sector} <: VectorSpace{S}
@@ -33,6 +56,7 @@ end
 @inline contentnames(::Type{<:TargetSpace}) = (:contents,)
 @inline getcontent(target::TargetSpace, ::Val{:contents}) = target.sectors
 function add!(target::TargetSpace, sector::Sector)
+    @assert all(map(previous->sumable(previous, sector), target.sectors)) "add! error: could not be direct summed."
     push!(target.sectors, sector)
     return target
 end

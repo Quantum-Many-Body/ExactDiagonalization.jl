@@ -11,9 +11,9 @@ using .CanonicalSpinSystems
 using .GreenFunctions
 
 # EDCore
-export Sector, TargetSpace, ED, EDKind, EDMatrix, EDMatrixRepresentation, SectorFilter
+export ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace
 
 # CanonicalFockSystems
-export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
+export BinaryBases, BinaryBasis, basistype
 
 end # module

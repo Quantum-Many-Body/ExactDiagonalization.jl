@@ -8,8 +8,9 @@ using SparseArrays: SparseMatrixCSC, spzeros
 using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
 import QuantumLattices: ⊗, matrix
+import ..EDCore: sumable, productable
 
-export BinaryBases, BinaryBasis, BinaryBasisRange, basistype, productable, sumable
+export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
 
 # Binary bases commonly used in canonical fermionic and hardcore bosonic quantum lattice systems
 @inline basistype(i::Integer) = basistype(typeof(i))
@@ -145,11 +146,8 @@ struct BinaryBases{A<:AbelianNumber, B<:BinaryBasis, T<:AbstractVector{B}} <: Se
     id::Vector{Tuple{B, A}}
     table::T
 end
-@inline Base.hash(bs::BinaryBases, h::UInt) = hash(bs.id, h)
 @inline Base.issorted(::BinaryBases) = true
 @inline Base.length(bs::BinaryBases) = length(bs.table)
-@inline Base.:(==)(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
-@inline Base.isequal(bs₁::BinaryBases, bs₂::BinaryBases) = isequal(bs₁.id, bs₂.id)
 @inline Base.getindex(bs::BinaryBases, i::Integer) = bs.table[i]
 @inline Base.eltype(bs::BinaryBases) = eltype(typeof(bs))
 @inline Base.eltype(::Type{<:BinaryBases{<:AbelianNumber, B}}) where {B<:BinaryBasis} = B
@@ -177,6 +175,26 @@ Get the Abelian quantum number of a set of binary bases.
 @inline AbelianNumber(bs::BinaryBases) = sum(rep->rep[2], bs.id)
 
 """
+    sumable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
+
+Judge whether two sets of binary bases could be direct summed.
+"""
+@inline sumable(bs₁::BinaryBases, bs₂::BinaryBases) = true
+
+"""
+    productable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
+
+Judge whether two sets of binary bases could be direct producted.
+"""
+function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
+    A₁==A₂ || return false
+    for (irr₁, irr₂) in product(bs₁.id, bs₂.id)
+        isequal(irr₁[1].rep & irr₂[1].rep, 0) || return false
+    end
+    return true
+end
+
+"""
     ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
 
 Get the direct product of two sets of binary bases.
@@ -191,28 +209,6 @@ function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
     end
     return BinaryBases(sort!([bs₁.id; bs₂.id]; by=first), sort!(table))
 end
-
-"""
-    productable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
-
-Judge whether two sets of binary bases could be direct producted.
-"""
-function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁, A₂}
-    A₁==A₂ || return false
-    for (irr₁, irr₂) in product(bs₁.id, bs₂.id)
-        isequal(irr₁[1].rep & irr₂[1].rep, 0) || return false
-    end
-    return true
-end
-
-"""
-    sumable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
-
-Judge whether two sets of binary bases could be direct summed.
-
-Strictly speaking, two sets of binary bases could be direct summed if and only if they have no intersection. The time complexity to check the intersection is O(n log n), which costs a lot when the dimension of the binary bases is huge. It is also possible to judge whether they could be direct summed by close investigations on their ids, i.e. the single-particle states and occupation number. It turns out that this is a multi-variable pure integer linear programming problem. In the future, this function would be implemented based on this observation. At present, the direct summability should be handled by the users in priori.
-"""
-@inline sumable(bs₁::BinaryBases, bs₂::BinaryBases) = true
 
 """
     BinaryBases(states)

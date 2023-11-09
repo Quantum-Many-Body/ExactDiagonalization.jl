@@ -1,5 +1,5 @@
 using ExactDiagonalization
-using ExactDiagonalization: sumable, productable
+using ExactDiagonalization: BinaryBasisRange, sumable, productable
 using LinearAlgebra: eigen
 using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, idtype, kind, matrix, parameternames, statistics, update!
 using QuantumLattices: AbelianNumber, Algorithm, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
