@@ -330,6 +330,16 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=
 end
 
 """
+    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...) -> TargetSpace
+
+Construct a target space from the total Hilbert space and the associated quantum numbers.
+"""
+function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...)
+    table=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    return TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), (quantumnumber, quantumnumbers...))...)
+end
+
+"""
     matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
@@ -366,16 +376,6 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
     end
     indptr[end] = ndata
     return SparseMatrixCSC(length(bra), length(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
-end
-
-"""
-    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...) -> TargetSpace
-
-Construct a target space from the total Hilbert space and the associated quantum numbers.
-"""
-function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...)
-    table=Table(hilbert, Metric(EDKind(hilbert), hilbert))
-    return TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), (quantumnumber, quantumnumbers...))...)
 end
 
 end # module
