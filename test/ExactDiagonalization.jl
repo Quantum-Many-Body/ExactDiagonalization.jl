@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using ExactDiagonalization: BinaryBasisRange, sumable, productable
 using LinearAlgebra: eigen
-using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, idtype, kind, matrix, parameternames, statistics, update!
+using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, id, idtype, kind, matrix, parameternames, statistics, update!
 using QuantumLattices: AbelianNumber, Algorithm, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
 using SparseArrays: SparseMatrixCSC
 
@@ -43,7 +43,7 @@ end
     @test length(bs) == length(bs) == 4
     @test bs == BinaryBases(1:2)
     @test isequal(bs, BinaryBases((2, 1)))
-    @test hash(bs, UInt(1)) == hash(bs.id, UInt(1))
+    @test hash(bs, UInt(1)) == hash(id(bs), UInt(1)) == hash((bs.quantumnumbers, bs.stategroups), UInt(1))
     for i = 1:length(bs)
         @test bs[i]==BinaryBasis(i-1)
         @test searchsortedfirst(bs[i], bs) == i
@@ -151,7 +151,7 @@ end
     @test Sector(hilbert, ParticleNumber(length(lattice))) == BinaryBases(2*length(lattice), length(lattice))
     @test Sector(hilbert, SpinfulParticle(NaN, NaN)) == BinaryBases{SpinfulParticle}(1:2*length(lattice))
     @test Sector(hilbert, SpinfulParticle(length(lattice), NaN)) == BinaryBases{SpinfulParticle}(2*length(lattice), length(lattice); Sz=NaN)
-    @test Sector(hilbert, SpinfulParticle(NaN, 0.5)) == BinaryBases([(BinaryBasis{UInt}(0b1111), SpinfulParticle(NaN, 0.5))], map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110]))
+    @test Sector(hilbert, SpinfulParticle(NaN, 0.5)) == BinaryBases([SpinfulParticle(NaN, 0.5)], [BinaryBasis{UInt}(0b1111)], map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110]))
     @test Sector(hilbert, SpinfulParticle(length(lattice), 0.0)) == BinaryBases{SpinfulParticle}(1:length(lattice), length(lattice)÷2; Sz=-0.5)⊗BinaryBases{SpinfulParticle}(length(lattice)+1:2*length(lattice), length(lattice)÷2; Sz=+0.5)
 
     @test TargetSpace(hilbert) == TargetSpace(BinaryBases(2*length(lattice)))

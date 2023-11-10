@@ -2,12 +2,12 @@ module CanonicalFockSystems
 
 using Base.Iterators: product
 using Printf: @printf
-using QuantumLattices: id, iscreation, periods, rank, statistics
+using QuantumLattices: iscreation, periods, rank, statistics
 using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
 using SparseArrays: SparseMatrixCSC, spzeros
 using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
-import QuantumLattices: ⊗, matrix
+import QuantumLattices: ⊗, id, matrix
 import ..EDCore: sumable, productable
 
 export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
@@ -143,9 +143,11 @@ end
 A set of binary bases.
 """
 struct BinaryBases{A<:AbelianNumber, B<:BinaryBasis, T<:AbstractVector{B}} <: Sector
-    id::Vector{Tuple{B, A}}
+    quantumnumbers::Vector{A}
+    stategroups::Vector{B}
     table::T
 end
+@inline id(bs::BinaryBases) = (bs.quantumnumbers, bs.stategroups)
 @inline Base.issorted(::BinaryBases) = true
 @inline Base.length(bs::BinaryBases) = length(bs.table)
 @inline Base.getindex(bs::BinaryBases, i::Integer) = bs.table[i]
@@ -153,16 +155,16 @@ end
 @inline Base.eltype(::Type{<:BinaryBases{<:AbelianNumber, B}}) where {B<:BinaryBasis} = B
 @inline Base.iterate(bs::BinaryBases, state=1) = state>length(bs) ? nothing : (bs.table[state], state+1)
 function Base.show(io::IO, bs::BinaryBases)
-    for (i, (states, qn)) in enumerate(bs.id)
-        @printf io "{2^[%s]: %s}" join(collect(states), " ") qn
-        i<length(bs.id) && @printf io "%s" " ⊗ "
+    for (i, (qn, group)) in enumerate(zip(bs.quantumnumbers, bs.stategroups))
+        @printf io "{2^[%s]: %s}" join(collect(group), " ") qn
+        i<length(bs.quantumnumbers) && @printf io "%s" " ⊗ "
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)
 function Base.show(io::IO, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange})
-    for (i, (states, qn)) in enumerate(bs.id)
-        @printf io "{2^1:%s}" maximum(collect(states))
-        i<length(bs.id) && @printf io "%s" " ⊗ "
+    for (i, (qn, group)) in enumerate(zip(bs.quantumnumbers, bs.stategroups))
+        @printf io "{2^1:%s}" maximum(collect(group))
+        i<length(bs.quantumnumbers) && @printf io "%s" " ⊗ "
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
@@ -172,14 +174,18 @@ end
 
 Get the Abelian quantum number of a set of binary bases.
 """
-@inline AbelianNumber(bs::BinaryBases) = sum(rep->rep[2], bs.id)
+@inline AbelianNumber(bs::BinaryBases) = sum(bs.quantumnumbers)
 
 """
     sumable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
 
 Judge whether two sets of binary bases could be direct summed.
 """
-@inline sumable(bs₁::BinaryBases, bs₂::BinaryBases) = true
+function sumable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
+    # A₁==A₂ || return false
+    # AbelianNumber(bs₁)==AbelianNumber(bs₂) || return true
+    true
+end
 
 """
     productable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
@@ -188,8 +194,8 @@ Judge whether two sets of binary bases could be direct producted.
 """
 function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
     A₁==A₂ || return false
-    for (irr₁, irr₂) in product(bs₁.id, bs₂.id)
-        isequal(irr₁[1].rep & irr₂[1].rep, 0) || return false
+    for (group₁, group₂) in product(bs₁.stategroups, bs₂.stategroups)
+        isequal(group₁.rep & group₂.rep, 0) || return false
     end
     return true
 end
@@ -207,7 +213,10 @@ function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
         table[count] = b₁ ⊗ b₂
         count += 1
     end
-    return BinaryBases(sort!([bs₁.id; bs₂.id]; by=first), sort!(table))
+    quantumnumbers = [bs₁.quantumnumbers; bs₂.quantumnumbers]
+    stategroups = [bs₁.stategroups; bs₂.stategroups]
+    permutation = sortperm(stategroups)
+    return BinaryBases(permute!(quantumnumbers, permutation), permute!(stategroups, permutation), sort!(table))
 end
 
 """
@@ -220,15 +229,17 @@ Construct a set of binary bases that subject to no quantum number conservation.
 """
 @inline BinaryBases(argument) = BinaryBases{ParticleNumber}(argument)
 function BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
-    id = [(BinaryBasis(one(nstate):nstate), A(map(p->NaN, periods(A))...))]
+    quantumnumber = A(map(p->NaN, periods(A))...)
+    stategroup = BinaryBasis(one(nstate):nstate)
     table = BinaryBasisRange(nstate)
-    return BinaryBases(id, table)
+    return BinaryBases([quantumnumber], [stategroup], table)
 end
 function BinaryBases{A}(states) where {A<:AbelianNumber}
-    id = [(BinaryBasis(states), A(map(p->NaN, periods(A))...))]
+    quantumnumber = A(map(p->NaN, periods(A))...)
+    stategroup = BinaryBasis(states)
     table = BinaryBasis{basistype(eltype(states))}[]
-    table = table!(table, NTuple{length(states), basistype(eltype(states))}(sort!(collect(states); rev=true)))
-    return BinaryBases(id, table)
+    table!(table, NTuple{length(states), basistype(eltype(states))}(sort!(collect(states); rev=true)))
+    return BinaryBases([quantumnumber], [stategroup], table)
 end
 function table!(table, states::NTuple{N}) where N
     for poses in DuplicatePermutations{N}((false, true))
@@ -249,10 +260,11 @@ Construct a set of binary bases that preserves the particle number conservation.
 @inline BinaryBases{A}(nstate::Integer, nparticle::Integer; kwargs...) where {A<:AbelianNumber} = BinaryBases{A}(one(nstate):nstate, nparticle; kwargs...)
 function BinaryBases{A}(states, nparticle::Integer; kwargs...) where {A<:AbelianNumber}
     kwargs = (kwargs..., N=nparticle)
-    id = [(BinaryBasis(states), A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...))]
+    quantumnumber = A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...)
+    stategroup = BinaryBasis(states)
     table = BinaryBasis{basistype(eltype(states))}[]
     table!(table, NTuple{length(states), basistype(eltype(states))}(sort!(collect(states); rev=true)), Val(nparticle))
-    return BinaryBases(id, table)
+    return BinaryBases([quantumnumber], [stategroup], table)
 end
 function table!(table, states::Tuple, ::Val{N}) where N
     for poses in Combinations{N}(states)
@@ -351,13 +363,13 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=
         spindws = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==-1//2)
         spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
         if isnan(quantumnumber.N)
-            id = [(BinaryBasis([spindws..., spinups...]), quantumnumber)]
+            stategroup = BinaryBasis([spindws..., spinups...])
             table = BinaryBasis{basistype}[]
             for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
                 ndw = nup-Int(2*quantumnumber.Sz)
                 append!(table, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
             end
-            return BinaryBases(id, sort!(table)::Vector{BinaryBasis{basistype}})
+            return BinaryBases([quantumnumber], [stategroup], sort!(table)::Vector{BinaryBasis{basistype}})
         else
             ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
             return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5*ndw) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5*nup)
