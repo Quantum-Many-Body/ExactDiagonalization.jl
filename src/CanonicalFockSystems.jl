@@ -12,7 +12,6 @@ import ..EDCore: sumable, productable
 
 export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
 
-# Binary bases commonly used in canonical fermionic and hardcore bosonic quantum lattice systems
 @inline basistype(i::Integer) = basistype(typeof(i))
 @inline basistype(::Type{T}) where {T<:Unsigned} = T
 @inline basistype(::Type{Int8}) = UInt8
@@ -43,6 +42,21 @@ end
 @inline Base.eltype(basis::BinaryBasis) = eltype(typeof(basis))
 @inline Base.eltype(::Type{<:BinaryBasis}) = Int
 @inline Base.IteratorSize(::Type{<:BinaryBasis}) = Base.SizeUnknown()
+
+"""
+    BinaryBasis(states; filter=index->true)
+    BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
+
+Construct a binary basis with the given occupied orbitals.
+"""
+@inline BinaryBasis(states; filter=index->true) = BinaryBasis{basistype(eltype(states))}(states; filter=filter)
+function BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
+    rep, eye = zero(I), one(I)
+    for (index, state) in enumerate(states)
+        filter(index) && (rep += eye<<(state-1))
+    end
+    return BinaryBasis(rep)
+end
 
 """
     iterate(basis::BinaryBasis, state=nothing)
@@ -110,21 +124,6 @@ Get the direct product of two binary bases.
 @inline ⊗(basis₁::BinaryBasis, basis₂::BinaryBasis) = BinaryBasis(basis₁.rep|basis₂.rep)
 
 """
-    BinaryBasis(states; filter=index->true)
-    BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
-
-Construct a binary basis with the given occupied orbitals.
-"""
-@inline BinaryBasis(states; filter=index->true) = BinaryBasis{basistype(eltype(states))}(states; filter=filter)
-function BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
-    rep, eye = zero(I), one(I)
-    for (index, state) in enumerate(states)
-        filter(index) && (rep += eye<<(state-1))
-    end
-    return BinaryBasis(rep)
-end
-
-"""
     BinaryBasisRange{I<:Unsigned} <: VectorSpace{BinaryBasis{I}}
 
 A continuous range of binary basis from 0 to 2^n-1.
@@ -168,56 +167,6 @@ function Base.show(io::IO, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:Bin
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases{<:AbelianNumber, <:BinaryBasis, <:BinaryBasisRange}) = Int(b.rep+1)
-
-"""
-    AbelianNumber(bs::BinaryBases)
-
-Get the Abelian quantum number of a set of binary bases.
-"""
-@inline AbelianNumber(bs::BinaryBases) = sum(bs.quantumnumbers)
-
-"""
-    sumable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
-
-Judge whether two sets of binary bases could be direct summed.
-"""
-function sumable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
-    # A₁==A₂ || return false
-    # AbelianNumber(bs₁)==AbelianNumber(bs₂) || return true
-    true
-end
-
-"""
-    productable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
-
-Judge whether two sets of binary bases could be direct producted.
-"""
-function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
-    A₁==A₂ || return false
-    for (group₁, group₂) in product(bs₁.stategroups, bs₂.stategroups)
-        isequal(group₁.rep & group₂.rep, 0) || return false
-    end
-    return true
-end
-
-"""
-    ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
-
-Get the direct product of two sets of binary bases.
-"""
-function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
-    @assert productable(bs₁, bs₂) "⊗ error: the input two sets of bases cannot be direct producted."
-    table = Vector{promote_type(eltype(bs₁), eltype(bs₂))}(undef, length(bs₁)*length(bs₂))
-    count = 1
-    for (b₁, b₂) in product(bs₁, bs₂)
-        table[count] = b₁ ⊗ b₂
-        count += 1
-    end
-    quantumnumbers = [bs₁.quantumnumbers; bs₂.quantumnumbers]
-    stategroups = [bs₁.stategroups; bs₂.stategroups]
-    permutation = sortperm(stategroups)
-    return BinaryBases(permute!(quantumnumbers, permutation), permute!(stategroups, permutation), sort!(table))
-end
 
 """
     BinaryBases(states)
@@ -273,43 +222,54 @@ function table!(table, states::Tuple, ::Val{N}) where N
     return reverse!(table)
 end
 
-# CSC-formed sparse matrix representation of an operator
 """
-    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+    AbelianNumber(bs::BinaryBases)
 
-Get the CSC-formed sparse matrix representation of an operator.
-
-Here, `table` specifies the order of the operator ids.
+Get the Abelian quantum number of a set of binary bases.
 """
-function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op))
-    bra, ket = braket[1], braket[2]
-    ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
-    data, indices, indptr = zeros(dtype, length(ket)), zeros(Int, length(ket)), zeros(Int, length(ket)+1)
-    sequences = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
-    iscreations = NTuple{rank(op), Bool}(iscreation(index) for index in reverse(id(op)))
-    for i = 1:length(ket)
-        flag = true
-        indptr[i] = ndata
-        intermediate[1] = ket[i]
-        for j = 1:rank(op)
-            isone(intermediate[j], sequences[j])==iscreations[j] && (flag = false; break)
-            intermediate[j+1] = iscreations[j] ? one(intermediate[j], sequences[j]) : zero(intermediate[j], sequences[j])
-        end
-        if flag
-            nsign = 0
-            statistics(eltype(op))==:f && for j = 1:rank(op)
-                nsign += count(intermediate[j], 1, sequences[j]-1)
-            end
-            index = searchsortedfirst(intermediate[end], bra)
-            if index<=length(bra) && bra[index]==intermediate[end]
-                indices[ndata] = index
-                data[ndata] = op.value*(-1)^nsign
-                ndata += 1
-            end
-        end
+@inline AbelianNumber(bs::BinaryBases) = sum(bs.quantumnumbers)
+
+"""
+    sumable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
+
+Judge whether two sets of binary bases could be direct summed.
+"""
+function sumable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
+    # A₁==A₂ || return false
+    # AbelianNumber(bs₁)==AbelianNumber(bs₂) || return true
+    true
+end
+
+"""
+    productable(bs₁::BinaryBases, bs₂::BinaryBases) -> Bool
+
+Judge whether two sets of binary bases could be direct producted.
+"""
+function productable(bs₁::BinaryBases{A₁}, bs₂::BinaryBases{A₂}) where {A₁<:AbelianNumber, A₂<:AbelianNumber}
+    A₁==A₂ || return false
+    for (group₁, group₂) in product(bs₁.stategroups, bs₂.stategroups)
+        isequal(group₁.rep & group₂.rep, 0) || return false
     end
-    indptr[end] = ndata
-    return SparseMatrixCSC(length(bra), length(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
+    return true
+end
+
+"""
+    ⊗(bs₁::BinaryBases, bs₂::BinaryBases) -> BinaryBases
+
+Get the direct product of two sets of binary bases.
+"""
+function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
+    @assert productable(bs₁, bs₂) "⊗ error: the input two sets of bases cannot be direct producted."
+    table = Vector{promote_type(eltype(bs₁), eltype(bs₂))}(undef, length(bs₁)*length(bs₂))
+    count = 1
+    for (b₁, b₂) in product(bs₁, bs₂)
+        table[count] = b₁ ⊗ b₂
+        count += 1
+    end
+    quantumnumbers = [bs₁.quantumnumbers; bs₂.quantumnumbers]
+    stategroups = [bs₁.stategroups; bs₂.stategroups]
+    permutation = sortperm(stategroups)
+    return BinaryBases(permute!(quantumnumbers, permutation), permute!(stategroups, permutation), sort!(table))
 end
 
 """
@@ -356,17 +316,66 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=
         spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
         if isnan(quantumnumber.N)
             stategroup = BinaryBasis([spindws..., spinups...])
-            table = BinaryBasis{basistype}[]
+            basistable = BinaryBasis{basistype}[]
             for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
                 ndw = nup-Int(2*quantumnumber.Sz)
-                append!(table, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
+                append!(basistable, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
             end
-            return BinaryBases([quantumnumber], [stategroup], sort!(table)::Vector{BinaryBasis{basistype}})
+            return BinaryBases([quantumnumber], [stategroup], sort!(basistable)::Vector{BinaryBasis{basistype}})
         else
             ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
             return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5*ndw) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5*nup)
         end
     end
+end
+
+"""
+    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+
+Get the CSC-formed sparse matrix representation of an operator.
+
+Here, `table` specifies the order of the operator ids.
+"""
+function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op))
+    bra, ket = braket[1], braket[2]
+    @assert bra.stategroups==ket.stategroups "matrix error: mismatched bra and ket."
+    ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
+    data, indices, indptr = zeros(dtype, length(ket)), zeros(Int, length(ket)), zeros(Int, length(ket)+1)
+    sequences = NTuple{rank(op), Int}(table[op[i]] for i in reverse(1:rank(op)))
+    iscreations = NTuple{rank(op), Bool}(iscreation(index) for index in reverse(id(op)))
+    for i = 1:length(ket)
+        flag = true
+        indptr[i] = ndata
+        intermediate[1] = ket[i]
+        for j = 1:rank(op)
+            isone(intermediate[j], sequences[j])==iscreations[j] && (flag = false; break)
+            intermediate[j+1] = iscreations[j] ? one(intermediate[j], sequences[j]) : zero(intermediate[j], sequences[j])
+        end
+        if flag
+            nsign = 0
+            statistics(eltype(op))==:f && for j = 1:rank(op)
+                nsign += count(intermediate[j], 1, sequences[j]-1)
+            end
+            index = searchsortedfirst(intermediate[end], bra)
+            if index<=length(bra) && bra[index]==intermediate[end]
+                indices[ndata] = index
+                data[ndata] = op.value*(-1)^nsign
+                ndata += 1
+            end
+        end
+    end
+    indptr[end] = ndata
+    return SparseMatrixCSC(length(bra), length(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
+end
+
+"""
+    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...) -> TargetSpace
+
+Construct a target space from the total Hilbert space and the associated quantum numbers.
+"""
+function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...)
+    table=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    return TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), (quantumnumber, quantumnumbers...))...)
 end
 
 end # module

@@ -44,6 +44,21 @@ Judge whether two sectors could be direct producted.
 function productable end
 
 """
+    matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops))) -> SparseMatrixCSC{dtype, Int}
+
+Get the CSC-formed sparse matrix representation of a set of operators.
+
+Here, `table` specifies the order of the operator ids.
+"""
+function matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops)))
+    result = spzeros(dtype, length(braket[1]), length(braket[2]))
+    for op in ops
+        result += matrix(op, braket, table; dtype=dtype)
+    end
+    return result
+end
+
+"""
     TargetSpace{S<:Sector} <: VectorSpace{S}
 
 The target Hilbert space in which the exact diagonalization method is performed, which could be the direct sum of several sectors.
@@ -67,6 +82,28 @@ function add!(target::TargetSpace, another::TargetSpace)
 end
 
 """
+    TargetSpace(sector::Sector, sectors::Sector...)
+
+Construct a target space from sectors.
+"""
+@inline function TargetSpace(sector::Sector, sectors::Sector...)
+    result = TargetSpace([sector])
+    for sec in sectors
+        add!(result, sec)
+    end
+    return result
+end
+
+"""
+    TargetSpace(hilbert::Hilbert; kwargs...)
+    TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple{Vararg{AbelianNumber}}; kwargs...)
+
+Construct a target space from the total Hilbert space and the associated quantum numbers.
+"""
+@inline TargetSpace(hilbert::Hilbert; kwargs...) = TargetSpace(Sector(hilbert; kwargs...))
+@inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple{Vararg{AbelianNumber}}; kwargs...) = TargetSpace(hilbert, quantumnumbers...; kwargs...)
+
+"""
     ⊕(sector::Sector, sectors::Union{Sector, TargetSpace}...) -> TargetSpace
     ⊕(target::TargetSpace, sectors::Union{Sector, TargetSpace}...) -> TargetSpace
 
@@ -83,31 +120,6 @@ end
     return result
 end
 
-"""
-    TargetSpace(sector::Sector, sectors::Sector...)
-
-Construct a target space from sectors.
-"""
-@inline function TargetSpace(sector::Sector, sectors::Sector...)
-    result = TargetSpace([sector])
-    for sec in sectors
-        add!(result, sec)
-    end
-    return result
-end
-
-"""
-    TargetSpace(hilbert::Hilbert; kwargs...)
-    TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple{Vararg{AbelianNumber}}; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
-    TargetSpace(hilbert::Hilbert, quantumnumbers::AbelianNumber...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...)
-
-Construct a target space from the total Hilbert space and the associated quantum numbers.
-"""
-@inline TargetSpace(hilbert::Hilbert; kwargs...) = TargetSpace(Sector(hilbert; kwargs...))
-@inline TargetSpace(hilbert::Hilbert, quantumnumbers::Tuple{Vararg{AbelianNumber}}; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
-@inline TargetSpace(hilbert::Hilbert, quantumnumbers::AbelianNumber...; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), kwargs...) = TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), quantumnumbers)...)
-
-# Generic exact diagonalization method
 """
     EDMatrix{S<:Sector, M<:SparseMatrixCSC} <: OperatorPack{M, Tuple{S, S}}
 
@@ -133,21 +145,6 @@ Construct a matrix representation when the ket and bra spaces share the same bas
 @inline EDMatrix(sector::Sector, m::SparseMatrixCSC) = EDMatrix(sector, sector, m)
 
 """
-    eigen(m::EDMatrix; nev=6, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=dtype(m)[]) -> Eigen
-
-Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
-"""
-@inline function eigen(m::EDMatrix; nev=6, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=dtype(m)[])
-    @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket spaces."
-    if size(m.matrix)[1] > 1
-        eigvals, eigvecs = eigs(m.matrix; nev=nev, which=which, tol=tol, maxiter=maxiter, sigma=sigma, ritzvec=true, v0=v₀)
-    else
-        eigvals, eigvecs = eigen(collect(m.matrix))
-    end
-    return Eigen(eigvals, eigvecs)
-end
-
-"""
     EDEigen{V<:Number, T<:Number, S<:Sector} <: Factorization{T}
 
 Eigen decomposition in exact diagonalization method.
@@ -164,6 +161,21 @@ end
 @inline Base.iterate(content::EDEigen, ::Val{:vectors}) = (content.vectors, Val(:sectors))
 @inline Base.iterate(content::EDEigen, ::Val{:sectors}) = (content.sectors, Val(:done))
 @inline Base.iterate(content::EDEigen, ::Val{:done}) = nothing
+
+"""
+    eigen(m::EDMatrix; nev=6, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=dtype(m)[]) -> Eigen
+
+Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
+"""
+@inline function eigen(m::EDMatrix; nev=6, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=dtype(m)[])
+    @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket spaces."
+    if size(m.matrix)[1] > 1
+        eigvals, eigvecs = eigs(m.matrix; nev=nev, which=which, tol=tol, maxiter=maxiter, sigma=sigma, ritzvec=true, v0=v₀)
+    else
+        eigvals, eigvecs = eigen(collect(m.matrix))
+    end
+    return Eigen(eigvals, eigvecs)
+end
 
 """
     eigen(ms::OperatorSum{<:EDMatrix}; nev::Int=1, tol::Real=0.0, maxiter::Int=300, v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:AbelianNumber, <:AbstractVector}}=dtype(eltype(ms))[], timer::TimerOutput=edtimer)
@@ -220,21 +232,6 @@ end
 Construct a exact matrix representation.
 """
 @inline EDMatrixRepresentation(target::TargetSpace, table) = EDMatrixRepresentation([(sector, sector) for sector in target], table)
-
-"""
-    matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops))) -> SparseMatrixCSC{dtype, Int}
-
-Get the CSC-formed sparse matrix representation of a set of operators.
-
-Here, `table` specifies the order of the operator ids.
-"""
-function matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops)))
-    result = spzeros(dtype, length(braket[1]), length(braket[2]))
-    for op in ops
-        result += matrix(op, braket, table; dtype=dtype)
-    end
-    return result
-end
 
 """
     SectorFilter{S} <: LinearTransformation
@@ -299,13 +296,10 @@ function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term
     return ED(lattice, hilbert, terms, quantumnumbers...; neighbors=neighbors, boundary=boundary, timer=timer, kwargs...)
 end
 function ED(lattice::AbstractLattice, hilbert::Hilbert, terms::Tuple{Vararg{Term}}, quantumnumbers::AbelianNumber...; neighbors::Union{Nothing, Int, Neighbors}=nothing, boundary::Boundary=plain, timer::TimerOutput=edtimer, kwargs...)
-    k = EDKind(hilbert)
-    table = Table(hilbert, Metric(k, hilbert))
-    targetspace = TargetSpace(hilbert, quantumnumbers...; table=table, kwargs...)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
     H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert; half=false, boundary=boundary)
-    mr = EDMatrixRepresentation(targetspace, table)
-    return ED{typeof(k)}(lattice, H, mr; timer=timer)
+    mr = EDMatrixRepresentation(TargetSpace(hilbert, quantumnumbers...; kwargs...), Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+    return ED{typeof(EDKind(hilbert))}(lattice, H, mr; timer=timer)
 end
 
 """
