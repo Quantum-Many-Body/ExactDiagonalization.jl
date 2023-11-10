@@ -4,7 +4,7 @@ using Base.Iterators: product
 using Printf: @printf
 using QuantumLattices: iscreation, periods, rank, statistics
 using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
-using SparseArrays: SparseMatrixCSC, spzeros
+using SparseArrays: SparseMatrixCSC
 using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
 
 import QuantumLattices: ⊗, id, matrix
@@ -276,7 +276,6 @@ end
 # CSC-formed sparse matrix representation of an operator
 """
     matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
-    matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=valtype(eltype(ops))) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
@@ -311,13 +310,6 @@ function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valty
     end
     indptr[end] = ndata
     return SparseMatrixCSC(length(bra), length(ket), indptr, indices[1:ndata-1], data[1:ndata-1])
-end
-function matrix(ops::Operators, braket::NTuple{2, BinaryBases}, table; dtype=valtype(eltype(ops)))
-    result = spzeros(dtype, length(braket[1]), length(braket[2]))
-    for op in ops
-        result += matrix(op, braket, table; dtype=dtype)
-    end
-    return result
 end
 
 """

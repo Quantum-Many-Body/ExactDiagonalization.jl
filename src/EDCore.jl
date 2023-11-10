@@ -4,7 +4,7 @@ using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization
 using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
 using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
-using SparseArrays: SparseMatrixCSC
+using SparseArrays: SparseMatrixCSC, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
@@ -220,6 +220,21 @@ end
 Construct a exact matrix representation.
 """
 @inline EDMatrixRepresentation(target::TargetSpace, table) = EDMatrixRepresentation([(sector, sector) for sector in target], table)
+
+"""
+    matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops))) -> SparseMatrixCSC{dtype, Int}
+
+Get the CSC-formed sparse matrix representation of a set of operators.
+
+Here, `table` specifies the order of the operator ids.
+"""
+function matrix(ops::Operators, braket::NTuple{2, Sector}, table; dtype=valtype(eltype(ops)))
+    result = spzeros(dtype, length(braket[1]), length(braket[2]))
+    for op in ops
+        result += matrix(op, braket, table; dtype=dtype)
+    end
+    return result
+end
 
 """
     SectorFilter{S} <: LinearTransformation
