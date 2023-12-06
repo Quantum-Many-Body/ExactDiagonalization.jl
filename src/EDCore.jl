@@ -1,7 +1,7 @@
 module EDCore
 
 using Arpack: eigs
-using LinearAlgebra: Eigen, Factorization
+using LinearAlgebra: Eigen, Factorization, norm
 using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
 using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
 using SparseArrays: SparseMatrixCSC, spzeros
@@ -171,6 +171,8 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
     @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket spaces."
     if size(m.matrix)[1] > 1
         eigvals, eigvecs = eigs(m.matrix; nev=nev, which=which, tol=tol, maxiter=maxiter, sigma=sigma, ritzvec=true, v0=v₀)
+        @assert norm(imag(eigvals))<10^-14 "eigen error: non-vanishing imaginary parts of the eigen values."
+        eigvals = real(eigvals)
     else
         eigvals, eigvecs = eigen(collect(m.matrix))
     end
