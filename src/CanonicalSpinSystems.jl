@@ -148,7 +148,7 @@ function matrix(op::Operator, braket::NTuple{2, SpinBases}, table; dtype=valtype
     end
     intermediate = [permute!(reduce(kron, ms[group]), permutation, permutation) for (group, permutation) in zip(ket.partition, ket.permutations)]
     # return reduce(kron, intermediate)
-    return reduce(kron, intermediate)[bra.permutation, ket.permutation]
+    return reduce(kron, intermediate)[bra.permutation[bra.slice], ket.permutation[ket.slice]]
 end
 
 end # module
