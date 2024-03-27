@@ -16,4 +16,7 @@ export ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilt
 # CanonicalFockSystems
 export BinaryBases, BinaryBasis, basistype
 
+# CanonicalSpinSystems
+export SpinBases
+
 end # module
