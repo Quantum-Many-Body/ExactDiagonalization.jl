@@ -67,7 +67,7 @@ end
 
 @testset "SpinBases" begin
     bs = SpinBases([1//2, 1//2])
-    @test id(bs) == (Sz(NaN), Rational{Int64}[1//2, 1//2], ([1], [2]))
+    @test isequal(id(bs), (Sz(NaN), Rational{Int64}[1//2, 1//2], ([1], [2])))
     @test length(bs) == 4
     @test string(bs) == "{(1/2₁) ⊗ (1/2₂): Sz(NaN)}"
     @test match(bs, bs)
@@ -79,7 +79,7 @@ end
     @test string(another) == "{(1/2₁) ⊗ (1/2₂): Sz(0.0)}"
     @test match(another, SpinBases([1//2, 1//2], Sz(1.0)))
     @test isequal(AbelianNumber(another), Sz(0.0))
-    @test summable(another, SpinBases([1//2, 1//2], Sz(1.0)))
+    @test sumable(another, SpinBases([1//2, 1//2], Sz(1.0)))
 end
 
 @testset "TargetSpace" begin
