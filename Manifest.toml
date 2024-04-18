@@ -2,7 +2,7 @@
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "5eaeb15e329c96af4ed6716c0ca07fb677fdb5fd"
+project_hash = "eb635c8d49ae87dff1afcac1a050363cf4feb820"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -151,6 +151,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LuxurySparse]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "84ce2a2a25c8a4561ef19a1a8be3c9305661fa08"
+uuid = "d05aeea4-b7d4-55ac-b691-9e7fabb07ba2"
+version = "0.7.4"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
