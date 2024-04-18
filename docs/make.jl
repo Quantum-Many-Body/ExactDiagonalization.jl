@@ -17,6 +17,7 @@ makedocs(;
         "Examples" => [
             "examples/Introduction.md",
             "examples/HubbardModel.md",
+            "examples/HeisenbergModel.md",
         ],
         "Manual" => [
             "man/EDCore.md",
