@@ -8,7 +8,7 @@ CurrentModule = ExactDiagonalization
 
 The following codes could compute the ground state energy of the antiferromagnetic Heisenberg model on square lattice.
 
-```@example hubbard
+```@example heisenberg
 using QuantumLattices
 using ExactDiagonalization
 using LinearAlgebra: eigen

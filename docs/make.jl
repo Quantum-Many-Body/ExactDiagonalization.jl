@@ -18,6 +18,7 @@ makedocs(;
             "examples/Introduction.md",
             "examples/HubbardModel.md",
             "examples/HeisenbergModel.md",
+            "examples/FractionalChernInsulatorOfHardCoreBosons.md",
         ],
         "Manual" => [
             "man/EDCore.md",
