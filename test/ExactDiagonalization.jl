@@ -211,3 +211,22 @@ end
     eigensystem = eigen(matrix(ed); nev=6)
     @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
 end
+
+@testset "spincoherentstates" begin
+    unitcell = Lattice([0.0, 0.0], [0.0, √3/3]; vectors=[[1.0, 0.0], [0.5, √3/2]])
+    lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
+
+    spins=Dict(i=>( isodd(i) ?  [0,0,1] : [0,0,-1] )    for i=1:length(lattice))
+    @test findmax(spincoherentstates(xyz2ang(spins)).|>abs) == (1.0,171)
+    
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+    targetspace = TargetSpace(hilbert)
+
+    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), (Sz(0.0), Sz(1.0), Sz(-1.0)))
+    eigensystem = eigen(matrix(ed); nev=4)
+    @test isapprox(eigensystem.values, [-9.189207065192935, -8.686937479074416, -8.686937479074407, -8.686937479074404]; atol=10^-12)
+
+    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1))
+    eigensystem = eigen(matrix(ed); nev=6)
+    @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
+end
