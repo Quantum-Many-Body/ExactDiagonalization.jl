@@ -14,6 +14,7 @@ import QuantumLattices: id, matrix
 import ..EDCore: sumable
 
 export SpinBases
+export xyz2ang, spincoherentstates, structure_factor, Pspincoherentstates
 
 struct SpinSlice{P<:Union{Vector{Int}, Colon}}
     positions::Vector{Int}
