@@ -217,16 +217,17 @@ end
     lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
 
     spins=Dict(i=>( isodd(i) ?  [0,0,1] : [0,0,-1] )    for i=1:length(lattice))
-    @test findmax(spincoherentstates(xyz2ang(spins)).|>abs) == (1.0,171)
+    state=spincoherentstates(xyz2ang(spins))
+    @test findmax(state.|>abs) == (1.0,171)
     
     hilbert = Hilbert(Spin{1//2}(), length(lattice))
     targetspace = TargetSpace(hilbert)
 
-    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), (Sz(0.0), Sz(1.0), Sz(-1.0)))
-    eigensystem = eigen(matrix(ed); nev=4)
-    @test isapprox(eigensystem.values, [-9.189207065192935, -8.686937479074416, -8.686937479074407, -8.686937479074404]; atol=10^-12)
+    k,s=structure_factor(lattice,targetspace[1],hilbert,state)
+    @test isapprox(s[3,2,11], 1.418439381905401)
+    @test isapprox(structure_factor(lattice,targetspace[1],hilbert,state,[0.0,4*pi/sqrt(3)]),1.25)
 
-    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1))
-    eigensystem = eigen(matrix(ed); nev=6)
-    @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
+    sp=Dict(1:2:length(lattice)|>collect=>[0.0,0.0],2:2:length(lattice)|>collect=>[pi,0.0])
+    seta,p,pscs=Pspincoherentstates(state,sp)
+    @test isapprox(pscs[:,1],[1.0 for _=1:length(pscs[:,1])])
 end
