@@ -233,7 +233,7 @@ end
 
 function xyz2ang(spins::Dict{Int, Vector{T}}) where T<:Real
     out=Matrix{Float64}(undef,2,length(spins))
-	for (i,k) in spin
+	for (i,k) in spins
 		out[1,i]=polar(k)
 		out[2,i]= k[1]==0&&k[2]==0 ? 0.0 : azimuthd(k)
 	end
