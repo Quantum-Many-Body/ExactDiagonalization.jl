@@ -225,7 +225,7 @@ end
 
     k,s=structure_factor(lattice,targetspace[1],hilbert,state)
     @test isapprox(s[3,2,11], 1.418439381905401)
-    @test isapprox(structure_factor(lattice,targetspace[1],hilbert,state,[0.0,4*pi/sqrt(3)]),1.25)
+    @test isapprox(structure_factor(lattice,targetspace[1],hilbert,state,[0.0,4*pi/sqrt(3)])[3],1.25)
 
     sp=Dict(1:2:length(lattice)|>collect=>[0.0,0.0],2:2:length(lattice)|>collect=>[pi,0.0])
     seta,p,pscs=Pspincoherentstates(state,sp)
