@@ -17,6 +17,6 @@ export ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilt
 export BinaryBases, BinaryBasis, basistype
 
 # CanonicalSpinSystems
-export SpinBases
+export SpinBases, xyz2ang, spincoherentstates, structure_factor, Pspincoherentstates
 
 end # module
