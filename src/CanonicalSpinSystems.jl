@@ -6,7 +6,7 @@ using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: findindex, totalspin
 using QuantumLattices: AbelianNumber, AbelianNumbers, Hilbert, Metric, Operator, OperatorUnitToTuple, Spin, Sz
-using QuantumLattices: AbstractLattice, table, Index
+using QuantumLattices: AbstractLattice, Table, Index
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse
 using ..EDCore: EDKind, Sector, TargetSpace, wrapper
 
