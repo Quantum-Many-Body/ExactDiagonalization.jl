@@ -6,7 +6,7 @@ using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: findindex, totalspin
 using QuantumLattices: AbelianNumber, AbelianNumbers, Hilbert, Metric, Operator, OperatorUnitToTuple, Spin, Sz
-using QuantumLattices: AbstractLattice, Table, Index
+using QuantumLattices: AbstractLattice, Table, Index, polar, azimuthd
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse
 using ..EDCore: EDKind, Sector, TargetSpace, wrapper
 
@@ -232,11 +232,12 @@ end
 
 
 function xyz2ang(spins::Dict{Int, Vector{T}}) where T<:Real
-    out=Matrix{Float64}(undef,3,length(spins))
-	for (i,k) in spins
-		out[:,i]=k/norm(k)
+    out=Matrix{Float64}(undef,2,length(spins))
+	for (i,k) in spin
+		out[1,i]=polar(k)
+		out[2,i]= k[1]==0&&k[2]==0 ? 0.0 : azimuthd(k)
 	end
-	return xyz2ang(out)
+	return out
 end
 
 
