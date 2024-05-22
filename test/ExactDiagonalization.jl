@@ -172,8 +172,8 @@ end
     @test TargetSpace(hilbert, ParticleNumber(length(lattice))) == TargetSpace(BinaryBases(2*length(lattice), length(lattice)))
 
     t = Hopping(:t, 1.0, 1)
-    U = Hubbard(:U, 0.0, modulate=true)
-    μ = Onsite(:μ, 0.0, modulate=true)
+    U = Hubbard(:U, 0.0)
+    μ = Onsite(:μ, 0.0)
 
     ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0)))
     @test kind(ed.frontend) == kind(typeof(ed.frontend)) == EDKind(:FED)
