@@ -1,8 +1,10 @@
 using ExactDiagonalization
 using ExactDiagonalization: BinaryBasisRange, sumable, productable
 using LinearAlgebra: eigen
-using QuantumLattices: ⊕, ⊗, add!, bonds, contentnames, dtype, getcontent, id, idtype, isintracell, kind, matrix, parameternames, statistics, update!
-using QuantumLattices: AbelianNumber, Algorithm, Coupling, CompositeIndex, FID, Fock, FockTerm, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Neighbors, Onsite, Operator, OperatorSum, OperatorGenerator, OperatorUnitToTuple, Parameters, Pairing, ParticleNumber, Spin, SpinfulParticle, SpinTerm, Table
+
+using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, id, idtype, kind, matrix, parameternames, statistics, update!
+using QuantumLattices: AbelianNumber, Algorithm, CompositeIndex, FID, Fock, Heisenberg, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorUnitToTuple, Parameters, ParticleNumber, Spin, SpinfulParticle, Sz, Table
+
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -65,6 +67,23 @@ end
     @test string(bs) == "{2^[1 2]: SpinfulParticle(1.0, -0.5)} ⊗ {2^[3 4]: SpinfulParticle(1.0, 0.5)}"
 end
 
+@testset "SpinBases" begin
+    bs = SpinBases([1//2, 1//2])
+    @test isequal(id(bs), (Sz(NaN), Rational{Int64}[1//2, 1//2], ([1], [2])))
+    @test length(bs) == 4
+    @test string(bs) == "{(1/2₁) ⊗ (1/2₂): Sz(NaN)}"
+    @test match(bs, bs)
+    @test isequal(AbelianNumber(bs), Sz(NaN))
+
+    another = SpinBases([1//2, 1//2], Sz(0.0))
+    @test id(another) == (Sz(0.0), Rational{Int64}[1//2, 1//2], ([1], [2]))
+    @test length(another) == 2
+    @test string(another) == "{(1/2₁) ⊗ (1/2₂): Sz(0.0)}"
+    @test match(another, SpinBases([1//2, 1//2], Sz(1.0)))
+    @test isequal(AbelianNumber(another), Sz(0.0))
+    @test sumable(another, SpinBases([1//2, 1//2], Sz(1.0)))
+end
+
 @testset "TargetSpace" begin
     bs₁ = BinaryBases(1:4, 2)
     bs₂ = BinaryBases(1:4, 3)
@@ -118,13 +137,13 @@ end
     target = BinaryBases(1:4, 1)⊕BinaryBases(1:4, 2)⊕BinaryBases(1:4, 3)
     M = EDMatrix{BinaryBases{ParticleNumber, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
 
-    mr = EDMatrixRepresentation(target, table)
+    mr = EDMatrixRepresentation{Float64}(target, table)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
 
     ms = mr(ops)
-    mr₁ = EDMatrixRepresentation(TargetSpace(target[1]), table)
-    mr₂ = EDMatrixRepresentation(TargetSpace(target[2]), table)
-    mr₃ = EDMatrixRepresentation(TargetSpace(target[3]), table)
+    mr₁ = EDMatrixRepresentation{Float64}(TargetSpace(target[1]), table)
+    mr₂ = EDMatrixRepresentation{Float64}(TargetSpace(target[2]), table)
+    mr₃ = EDMatrixRepresentation{Float64}(TargetSpace(target[3]), table)
     @test ms == mr₁(ops) + mr₂(ops) + mr₃(ops)
     @test mr₁(ops) == mr₁(op₁) + mr₁(op₂) + mr₁(op₃)
     @test mr₂(ops) == mr₂(op₁) + mr₂(op₂) + mr₂(op₃)
@@ -136,12 +155,9 @@ end
     @test sf(ms) == mr₁(ops)
 end
 
-@testset "ED" begin
+@testset "FED" begin
     @test EDKind(Hilbert{<:Fock}) == EDKind(:FED)
-    @test EDKind(Hilbert{<:Spin}) == EDKind(:SED)
-
     @test Metric(EDKind(:FED), Hilbert(1=>Fock{:f}(1, 2))) == OperatorUnitToTuple(:spin, :site, :orbital)
-    @test Metric(EDKind(:SED), Hilbert(1=>Spin{1//2}())) == OperatorUnitToTuple(:site)
 
     lattice = Lattice([0.0], [1.0])
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
@@ -156,13 +172,12 @@ end
 
     @test TargetSpace(hilbert) == TargetSpace(BinaryBases(2*length(lattice)))
     @test TargetSpace(hilbert, ParticleNumber(length(lattice))) == TargetSpace(BinaryBases(2*length(lattice), length(lattice)))
-    @test TargetSpace(hilbert, ParticleNumber(length(lattice)-1), ParticleNumber(length(lattice)), ParticleNumber(length(lattice)+1)) == TargetSpace(hilbert, (ParticleNumber(length(lattice)-1), ParticleNumber(length(lattice)), ParticleNumber(length(lattice)+1)))
 
     t = Hopping(:t, 1.0, 1)
-    U = Hubbard(:U, 0.0, modulate=true)
-    μ = Onsite(:μ, 0.0, modulate=true)
+    U = Hubbard(:U, 0.0)
+    μ = Onsite(:μ, 0.0)
 
-    ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0); basistype=UInt8))
+    ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), SpinfulParticle(length(lattice), 0.0)))
     @test kind(ed.frontend) == kind(typeof(ed.frontend)) == EDKind(:FED)
     @test valtype(ed.frontend) == valtype(typeof(ed.frontend)) == Float64
     @test statistics(ed.frontend) == statistics(typeof(ed.frontend)) == :f
@@ -180,6 +195,43 @@ end
     eigensystem = eigen(ed, SpinfulParticle(length(lattice), 0.0); nev=1)
     @test isapprox(eigensystem.values[1], -2.5615528128088303; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
+end
+
+@testset "SED" begin
+    @test EDKind(Hilbert{<:Spin}) == EDKind(:SED)
+    @test Metric(EDKind(:SED), Hilbert(1=>Spin{1//2}())) == OperatorUnitToTuple(:site)
+
+    unitcell = Lattice([0.0, 0.0]; name=:Square, vectors=[[1.0, 0.0], [0.0, 1.0]])
+    lattice = Lattice(unitcell, (4, 4))
+    hilbert = Hilbert(site=>Spin{1//2}() for site=1:length(lattice))
+
+    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), (Sz(0.0), Sz(1.0), Sz(-1.0)))
+    eigensystem = eigen(matrix(ed); nev=4)
+    @test isapprox(eigensystem.values, [-9.189207065192935, -8.686937479074416, -8.686937479074407, -8.686937479074404]; atol=10^-12)
+
+    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1))
+    eigensystem = eigen(matrix(ed); nev=6)
+    @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
+end
+
+@testset "spincoherentstates" begin
+    unitcell = Lattice([0.0, 0.0], [0.0, √3/3]; vectors=[[1.0, 0.0], [0.5, √3/2]])
+    lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
+
+    spins = Dict(i=>(isodd(i) ? [0, 0, 1] : [0, 0, -1]) for i=1:length(lattice))
+    state = spincoherentstates(xyz2ang(spins))
+    @test findmax(state.|>abs) == (1.0, 171)
+
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+    targetspace = TargetSpace(hilbert)
+
+    k, s = structure_factor(lattice, targetspace[1], hilbert, state)
+    @test isapprox(s[3, 2, 11], 1.418439381905401)
+    @test isapprox(structure_factor(lattice, targetspace[1], hilbert, state, [0.0, 4*pi/sqrt(3)])[3], 1.25)
+
+    sp = Dict(1:2:length(lattice)|>collect=>[0.0, 0.0], 2:2:length(lattice)|>collect=>[pi, 0.0])
+    seta, p, pscs = Pspincoherentstates(state, sp)
+    @test isapprox(pscs[:, 1], [1.0 for _=1:length(pscs[:, 1])])
 end
 
 @testset "partition" begin

@@ -5,10 +5,10 @@ using Printf: @printf
 using QuantumLattices: iscreation, periods, rank, statistics
 using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
 using SparseArrays: SparseMatrixCSC
-using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace
+using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace, wrapper
 
 import QuantumLattices: ⊗, id, matrix
-import ..EDCore: sumable, productable
+import ..EDCore: productable, sumable
 
 export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
 
@@ -314,14 +314,14 @@ Get the index-to-tuple metric for a canonical quantum Fock lattice system.
 @inline @generated Metric(::EDKind{:FED}, ::Hilbert{<:Fock}) = OperatorUnitToTuple(:spin, :site, :orbital)
 
 """
-    Sector(hilbert::Hilbert{<:Fock}; basistype=UInt, kwargs...) -> BinaryBases
-    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
-    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}, basistype=UInt) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
+    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
 
 Construct the binary bases of a Hilbert space with the specified quantum number.
 """
-@inline Sector(hilbert::Hilbert{<:Fock}; basistype=UInt, kwargs...) = BinaryBases(basistype(sum([length(internal)÷2 for internal in values(hilbert)])))
-function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
+@inline Sector(hilbert::Hilbert{<:Fock}, basistype=UInt) = BinaryBases(basistype(sum([length(internal)÷2 for internal in values(hilbert)])))
+function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
     if isnan(quantumnumber.N)
         return BinaryBases{ParticleNumber}(states)
@@ -329,7 +329,7 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ParticleNumber; table=T
         return BinaryBases{ParticleNumber}(states, Int(quantumnumber.N))
     end
 end
-function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)), basistype=UInt)
+function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     @assert all(internal->internal.nspin==2, values(hilbert)) "Sector error: only for spin-1/2 systems."
     if isnan(quantumnumber.Sz)
         states = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal)
@@ -350,23 +350,24 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle; table=
 end
 
 """
-    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...) -> TargetSpace
+    TargetSpace(hilbert::Hilbert{<:Fock}, basistype=UInt)
+    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
 
 Construct a target space from the total Hilbert space and the associated quantum numbers.
 """
-function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumber::AbelianNumber, quantumnumbers::AbelianNumber...; kwargs...)
-    table=Table(hilbert, Metric(EDKind(hilbert), hilbert))
-    return TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber; table=table, kwargs...), (quantumnumber, quantumnumbers...))...)
+@inline TargetSpace(hilbert::Hilbert{<:Fock}, basistype=UInt) = TargetSpace(Sector(hilbert, basistype))
+@inline function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, basistype=UInt; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+    return TargetSpace(map(quantumnumber->Sector(hilbert, quantumnumber, basistype; table=table), wrapper(quantumnumbers))...)
 end
 
 """
-    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table, dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
 Here, `table` specifies the order of the operator ids.
 """
-function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table; dtype=valtype(op))
+function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table, dtype=valtype(op))
     bra, ket = braket[1], braket[2]
     @assert bra.stategroups==ket.stategroups "matrix error: mismatched bra and ket."
     ndata, intermediate = 1, zeros(ket|>eltype, rank(op)+1)
