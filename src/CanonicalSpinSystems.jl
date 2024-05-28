@@ -251,13 +251,13 @@ function xyz2ang(spins::Matrix{T}) where {T<:Real}
 end
 
 """
-    spincoherentstates(s::Matrix{Float64}) -> Matrix{Float64}
+    spincoherentstates(structure::Matrix{Float64}) -> Matrix{Float64}
 
 Get the spin coherent states from the input spin structures specified by the polar and azimuth angles.
 """
-function spincoherentstates(s::Matrix{Float64})
+function spincoherentstates(structure::Matrix{Float64})
     @assert size(structure, 1)==2 "spincoherentstates error: spin structures must be specified by the polar and azimuth angles of a spin orientation."
-    out = [[exp(im/2*s[2, i])*sin(s[1, i]/2), exp(-im/2*s[2, i])*cos(s[1, i]/2)] for i=1:size(s, 2)]
+    out = [[exp(im/2*structure[2, i])*sin(structure[1, i]/2), exp(-im/2*structure[2, i])*cos(structure[1, i]/2)] for i=1:size(structure, 2)]
     return kron(out...)
 end
 
