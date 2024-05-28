@@ -6,7 +6,7 @@ using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: findindex, totalspin
 using QuantumLattices: AbelianNumber, AbelianNumbers, Hilbert, Metric, Operator, OperatorUnitToTuple, Spin, Sz
-using QuantumLattices: AbstractLattice, Table, Index, polar, azimuthd
+using QuantumLattices: AbstractLattice, Table, Index, polar, azimuth
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse
 using ..EDCore: EDKind, Sector, TargetSpace, wrapper
 
@@ -230,133 +230,112 @@ function Base.kron!(result::SparseMatrixCOO, ms::Tuple{Vararg{SparseMatrixCOO}};
     return result
 end
 
-
-function xyz2ang(spins::Dict{Int, Vector{T}}) where T<:Real
-    out=Matrix{Float64}(undef,2,length(spins))
-	for (i,k) in spins
-		out[1,i]=polar(k)
-		out[2,i]= k[1]==0&&k[2]==0 ? 0.0 : azimuthd(k)
-	end
-	return out
+function xyz2ang(spins::Dict{Int, Vector{T}}) where {T<:Real}
+    out = Matrix{Float64}(undef, 2, length(spins))
+    for (i, k) in spins
+        @assert length(k)==3 "xyz2ang error: incomplete spin components."
+        out[1, i] = polar(k)
+        out[2, i] = azimuth(k)
+    end
+    return out
 end
-
-
-
-function xyz2ang(spins::Matrix{T}) where T<:Real
-	out=Matrix{Float64}(undef,2,size(spins,2))
-	out[1,:]=acos.(spins[3,:])
-	
-	out[2,:]=atan.(spins[2,:]./(spins[1,:].+1e-10)).-(sign.(spins[1,:].+1e-10).-1)*(pi/2)
-	return out
+function xyz2ang(spins::Matrix{T}) where {T<:Real}
+    @assert size(spins, 1)==3 "xyz2ang error: incomplete spin components."
+    out = Matrix{Float64}(undef, 2, size(spins, 2))
+    for i = size(spins, 2)
+        k = spins[:, i]
+        out[1, i] = polar(k)
+        out[2, i] = azimuth(k)
+    end
+    return out
 end
 
 """
-    spincoherentstates(la::AbstractLattice,structure::Matrix{Float64}) -> Matrix{Float64}
+    spincoherentstates(s::Matrix{Float64}) -> Matrix{Float64}
 
-Get the spincoherentstates from Matrix{Float64}(2, length(lattice)) of θ ϕ.
-
+Get the spin coherent states from the input spin structures specified by the polar and azimuth angles.
 """
-function spincoherentstates(la::AbstractLattice,structure::Matrix{Float64})
-	@assert length(lattice)==size(structure,2) "the size of lattice and structure are not equal."
-	spincoherentstates(structure)
-end
-
 function spincoherentstates(s::Matrix{Float64})
-	out=[[exp(im/2*s[2,i])*sin(s[1,i]/2),exp(-im/2*s[2,i])*cos(s[1,i]/2)] for i=1:size(s,2)]
-	return kron(out...)
+    @assert size(structure, 1)==2 "spincoherentstates error: spin structures must be specified by the polar and azimuth angles of a spin orientation."
+    out = [[exp(im/2*s[2, i])*sin(s[1, i]/2), exp(-im/2*s[2, i])*cos(s[1, i]/2)] for i=1:size(s, 2)]
+    return kron(out...)
 end
 
 """
-    structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T},k::Vector{Float64}) -> [SxSx(k),SySy(k),SzSz(k)]
-    structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T};Nk::Int=60) -> Matrix(3,Nk,Nk)
+    structure_factor(lattice::AbstractLattice, bs::SpinBases, hilbert::Hilbert, scs::AbstractVector{T}, k::Vector{Float64}) where {T<:Number} -> [SxSx(k), SySy(k), SzSz(k)]
+    structure_factor(lattice::AbstractLattice, bs::SpinBases, hilbert::Hilbert, scs::AbstractVector{T}; Nk::Int=60) where {T<:Number} -> Matrix(3, Nk, Nk)
 
 Get structure_factor of state "scs".
-
 """
-function structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T},k::Vector{Float64}) where T<:Number
-	N=length(lattice)
-	table=Table(hilbert, OperatorUnitToTuple(:site))
-	
-	base=(bs,bs)
-
-	sq=zeros(ComplexF64,3)
-	for j=1:N,i=1:N
-		expikr=exp(im*dot(k,lattice[i]-lattice[j]))
-		xx=Operator(1, Index(i, hilbert[i][1]),Index(j, hilbert[j][1]))
-		yy=Operator(1, Index(i, hilbert[i][2]),Index(j, hilbert[j][2]))
-		zz=Operator(1, Index(i, hilbert[i][3]),Index(j, hilbert[j][3]))
-		mx=matrix(xx, base, table, ComplexF64)
-		my=matrix(yy, base, table, ComplexF64)
-		mz=matrix(zz, base, table, ComplexF64)
-
-		sq[1]+=real(dot(scs, mx, scs))*expikr
-		sq[2]+=real(dot(scs, my, scs))*expikr
-		sq[3]+=real(dot(scs, mz, scs))*expikr
-	
-	end
-	
-	return real.(sq)/N
+function structure_factor(lattice::AbstractLattice, bs::SpinBases, hilbert::Hilbert, scs::AbstractVector{T}, k::Vector{Float64}) where {T<:Number}
+    N = length(lattice)
+    table = Table(hilbert, OperatorUnitToTuple(:site))
+    base = (bs, bs)
+    sq = zeros(ComplexF64, 3)
+    for j=1:N, i=1:N
+        phase = exp(im*dot(k, lattice[i]-lattice[j]))
+        xx = Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1]))
+        yy = Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2]))
+        zz = Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3]))
+        mx = matrix(xx, base, table, ComplexF64)
+        my = matrix(yy, base, table, ComplexF64)
+        mz = matrix(zz, base, table, ComplexF64)
+        sq[1] += real(dot(scs, mx, scs))*phase
+        sq[2] += real(dot(scs, my, scs))*phase
+        sq[3] += real(dot(scs, mz, scs))*phase
+    end
+    return real.(sq)/N
+end
+function structure_factor(lattice::AbstractLattice, bs::SpinBases, hilbert::Hilbert, scs::AbstractVector{T}; Nk::Int=60) where {T<:Number}
+    N = length(lattice)
+    table = Table(hilbert, OperatorUnitToTuple(:site))
+    base = (bs, bs)
+    ks = range(-2pi, 2pi, length=Nk+1)
+    ss = Array{Float64}(undef, 3, N, N)
+    for j=1:N, i=1:N
+        xx = Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1]))
+        yy = Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2]))
+        zz = Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3]))
+        mx = matrix(xx, base, table, ComplexF64)
+        ss[1, i, j] = real(dot(scs, mx, scs))
+        my = matrix(yy, base, table, ComplexF64)
+        ss[2, i, j] = real(dot(scs, my, scs))
+        mz = matrix(zz, base, table, ComplexF64)
+        ss[3, i, j] = real(dot(scs, mz, scs))
+    end
+    sq = zeros(ComplexF64, 3, Nk+1, Nk+1)
+    for x=1:Nk+1, y=1:Nk+1
+        ki = [ks[x], ks[y]]
+        for j=1:N, i=1:N
+            phase = exp(im*dot(ki, lattice[i]-lattice[j]))
+            sq[1, x, y] += ss[1,i,j] * phase
+            sq[2, x, y] += ss[2,i,j] * phase
+            sq[3, x, y] += ss[3,i,j] * phase
+        end
+    end
+    return ks, real.(sq)/N
 end
 
-
-function structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T};Nk::Int=60) where T<:Number
-	N=length(lattice)
-	table=Table(hilbert, OperatorUnitToTuple(:site))
-	
-	base=(bs,bs)
-	ks=range(-2pi,2pi,length=Nk+1)
-
-	ss=Array{Float64}(undef,3,N,N)
-	for j=1:N,i=1:N
-		xx=Operator(1, Index(i, hilbert[i][1]),Index(j, hilbert[j][1]))
-		yy=Operator(1, Index(i, hilbert[i][2]),Index(j, hilbert[j][2]))
-		zz=Operator(1, Index(i, hilbert[i][3]),Index(j, hilbert[j][3]))
-		mx=matrix(xx, base, table, ComplexF64)
-		ss[1,i,j]=real(dot(scs, mx, scs))
-		my=matrix(yy, base, table, ComplexF64)
-		ss[2,i,j]=real(dot(scs, my, scs))
-		mz=matrix(zz, base, table, ComplexF64)
-		ss[3,i,j]=real(dot(scs, mz, scs))
-	
-	end
-	
-	sq=zeros(ComplexF64,3,Nk+1,Nk+1)
-	for x=1:Nk+1,y=1:Nk+1
-		ki=[ks[x],ks[y]]
-		for j=1:N,i=1:N
-			expikr=exp(im*dot(ki,lattice[i]-lattice[j]))
-			sq[1,x,y]+=ss[1,i,j]*expikr
-			sq[2,x,y]+=ss[2,i,j]*expikr
-			sq[3,x,y]+=ss[3,i,j]*expikr
-		end
-	end
-	return ks,real.(sq)/N
-end
 """
-    structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T},k::Vector{Float64}) -> [SxSx(k),SySy(k),SzSz(k)]
-    structure_factor(lattice::AbstractLattice,bs::SpinBases,hilbert::Hilbert,scs::AbstractVector{T};Nk::Int=60) -> Matrix(3,Nk,Nk)
+    Pspincoherentstates(scs::AbstractVector{T}, spins::Dict{Vector{Int}, Vector{Float64}}; N::Int=100) where {T<:Number}
 
-Get suqare of the Projectors of state "scs" onto spincoherentstates.
-
+Get square of the Projectors of state "scs" onto spincoherentstates.
 """
-function Pspincoherentstates(scs::AbstractVector{T},spins::Dict{Vector{Int},Vector{Float64}};N::Int=100) where T<:Number
-	L=spins|>keys.|>length|>sum
-	@assert sort(cat(keys(spins)...,dims=1))==1:L|>collect "the lattices are not matching."
-	s=range(0,pi,length=N)
-	p=range(0,2*pi,length=N)
-	
-	out=Matrix{Float64}(undef,N,N)
-	for i=1:N,j=1:N
-		ss=zeros(2,L)
-		for (k,v) in spins
-			ss[:,k].=[s[i],p[j]]+v
-		end
-		scst=spincoherentstates(ss)
-		out[j,i]=abs(dot(scst,scs))^2
-	end
-
-	return s,p,out
+function Pspincoherentstates(scs::AbstractVector{T}, spins::Dict{Vector{Int}, Vector{Float64}}; N::Int=100) where {T<:Number}
+    L = spins|>keys.|>length|>sum
+    @assert sort(cat(keys(spins)...,dims=1))==1:L|>collect "Pspincoherentstates error: the lattices are not matching."
+    s = range(0, pi, length=N)
+    p = range(0, 2*pi, length=N)
+    out = Matrix{Float64}(undef, N, N)
+    for i=1:N, j=1:N
+        ss = zeros(2, L)
+        for (k, v) in spins
+            ss[:, k] .= [s[i], p[j]] + v
+        end
+        scst = spincoherentstates(ss)
+        out[j, i] = abs(dot(scst, scs))^2
+    end
+    return s, p, out
 end
-
 
 end # module
