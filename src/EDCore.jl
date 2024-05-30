@@ -3,14 +3,14 @@ module EDCore
 using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization, norm
 using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
-using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle
+using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Entry, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reset!
 using SparseArrays: SparseMatrixCSC, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
-import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, kind, matrix, parameternames, statistics, update!
+import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, kind, matrix, parameternames, prepare!, statistics, update!
 
-export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace, productable, sumable
+export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace, productable, release!, sumable
 
 """
     const edtimer = TimerOutput()
@@ -273,9 +273,9 @@ struct ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Fron
     lattice::L
     H::G
     Hₘ::M
-    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer) where {K<:EDKind}
+    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer, delay::Bool=true) where {K<:EDKind}
         @timeit timer "matrix" begin
-            @timeit timer "prepare" Hₘ = mr(H)
+            @timeit timer "prepare" Hₘ = delay ? Image(mr(empty(Entry(H))), mr, objectid(H)) : mr(H)
         end
         new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
@@ -295,18 +295,45 @@ end
 @inline Parameters(ed::ED) = Parameters(ed.H)
 
 """
+    prepare!(ed::ED; timer::TimerOutput=edtimer) -> ED
+    prepare!(ed::Algorithm{<:ED}) -> Algorithm{<:ED}
+
+Prepare the matrix representation.
+"""
+@inline function prepare!(ed::ED; timer::TimerOutput=edtimer)
+    @timeit timer "prepare" (isempty(ed.Hₘ) && reset!(ed.Hₘ, ed.Hₘ.transformation, ed.H))
+    return ed
+end
+@inline prepare!(ed::Algorithm{<:ED}) = prepare!(ed.frontend; timer=ed.timer)
+
+"""
+    release!(ed::ED; gc::Bool=true) -> ED
+    release!(ed::Algorithm{<:ED}; gc::Bool=true) -> Algorithm{<:ED}
+
+Release the memory source used in preparing the matrix representation. If `gc` is `true`, call the garbage collection immediately.
+"""
+@inline function release!(ed::ED; gc::Bool=true)
+    empty!(ed.Hₘ)
+    gc && GC.gc()
+    return ed
+end
+@inline release!(ed::Algorithm{<:ED}; gc::Bool=true) = release!(ed.frontend; gc=gc)
+
+"""
     matrix(ed::ED, sectors::Union{AbelianNumber, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> OperatorSum{<:EDMatrix}
     matrix(ed::Algorithm{<:ED}, sectors::Union{AbelianNumber, Sector}...; kwargs...) -> OperatorSum{<:EDMatrix}
 
 Get the sparse matrix representation of a quantum lattice system in the target space.
 """
 function matrix(ed::ED; timer::TimerOutput=edtimer, kwargs...)
+    isempty(ed.Hₘ) && @warn("Empty matrix found. You may need to call `prepare!` first.")
     @timeit timer "matrix" begin
         @timeit timer "expand" (result = expand(ed.Hₘ))
     end
     return result
 end
 function matrix(ed::ED, sectors::Sector...; timer::TimerOutput=edtimer, kwargs...)
+    isempty(ed.Hₘ) && @warn("Empty matrix found. You may need to call `prepare!` first.")
     @timeit timer "matrix" begin
         @timeit timer "expand" (result = expand(SectorFilter(sectors...)(ed.Hₘ)))
     end
@@ -332,20 +359,20 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 """
     ED(
         lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, targetspace::TargetSpace=TargetSpace(hilbert), dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer
+        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
     )
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
 function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, targetspace::TargetSpace=TargetSpace(hilbert), dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer
+    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
 )
     terms = wrapper(terms)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
     H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert, boundary; half=false)
     mr = EDMatrixRepresentation{dtype}(targetspace, Table(hilbert, Metric(EDKind(hilbert), hilbert)))
-    return ED{typeof(EDKind(hilbert))}(lattice, H, mr; timer=timer)
+    return ED{typeof(EDKind(hilbert))}(lattice, H, mr; timer=timer, delay=delay)
 end
 @inline wrapper(x) = (x,)
 @inline wrapper(x::Tuple) = x
@@ -354,29 +381,17 @@ end
 
 """
     ED(
-        lattice::AbstractLattice,
-        hilbert::Hilbert,
-        terms::Union{Term, Tuple{Term, Vararg{Term}}},
-        quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}},
-        dtype::Type{<:Number}=commontype(terms),
-        boundary::Boundary=plain;
-        neighbors::Union{Nothing, Int, Neighbors}=nothing,
-        timer::TimerOutput=edtimer,
+        lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
+        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
     )
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
 function ED(
-    lattice::AbstractLattice,
-    hilbert::Hilbert,
-    terms::Union{Term, Tuple{Term, Vararg{Term}}},
-    quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}},
-    boundary::Boundary=plain,
-    dtype::Type{<:Number}=commontype(terms);
-    neighbors::Union{Nothing, Int, Neighbors}=nothing,
-    timer::TimerOutput=edtimer
-    )
-    return ED(lattice, hilbert, terms, TargetSpace(hilbert, wrapper(quantumnumbers)), dtype, boundary; neighbors=neighbors, timer=timer)
+    lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
+    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
+)
+    return ED(lattice, hilbert, terms, TargetSpace(hilbert, wrapper(quantumnumbers)), dtype, boundary; neighbors=neighbors, timer=timer, delay=delay)
 end
 
 end # module
