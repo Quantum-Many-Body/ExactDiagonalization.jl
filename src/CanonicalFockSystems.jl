@@ -223,28 +223,33 @@ function table!(table, states::Tuple, ::Val{N}) where N
 end
 
 """
-    BinaryBases(spindws, spinups, spinz)
+    BinaryBases(spindws, spinups, sz::Real)
+    BinaryBases{A}(spindws, spinups, sz::Real; kwargs...) where {A<:AbelianNumber}
 
-Construct a set of binary bases that preserves the spin z component conservation.
+Construct a set of binary bases that preserves the spin z component but not the particle number conservation.
 """
-function BinaryBases(spindws, spinups, spinz::Real; basistype=UInt)
-    quantumnumber = SpinfulParticle(NaN, spinz)
+@inline BinaryBases(spindws, spinups, sz::Real) = BinaryBases{SpinfulParticle}(spindws, spinups, sz)
+function BinaryBases{A}(spindws, spinups, sz::Real; kwargs...) where {A<:AbelianNumber}
+    kwargs = (kwargs..., N=NaN, Sz=sz)
+    quantumnumber = A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...)
     stategroup = BinaryBasis([spindws..., spinups...])
-    basistable = BinaryBasis{basistype}[]
+    basistable = typeof(stategroup)[]
     for nup in max(Int(2*quantumnumber.Sz), 0):min(length(spinups)+Int(2*quantumnumber.Sz), length(spinups))
         ndw = nup-Int(2*quantumnumber.Sz)
         append!(basistable, BinaryBases(spindws, ndw) ⊗ BinaryBases(spinups, nup))
     end
-    return BinaryBases([quantumnumber], [stategroup], sort!(basistable)::Vector{BinaryBasis{basistype}})
+    return BinaryBases([quantumnumber], [stategroup], sort!(basistable)::Vector{typeof(stategroup)})
 end
 
 """
-    BinaryBases(spindws, spinups, nparticle, spinz)
+    BinaryBases(spindws, spinups, nparticle::Integer, sz::Real)
 
-Construct a set of binary bases that preserves the particle number and the spin z component conservation.
+Construct a set of binary bases that preserves both the particle number and the spin z component conservation.
 """
-function BinaryBases(spindws, spinups, nparticle::Integer, spinz::Real)
-    quantumnumber = SpinfulParticle(nparticle, spinz)
+@inline BinaryBases(spindws, spinups, nparticle::Integer, sz::Real) = BinaryBases{SpinfulParticle}(spindws, spinups, nparticle, sz)
+function BinaryBases{A}(spindws, spinups, nparticle::Integer, sz::Real; kwargs...) where {A<:AbelianNumber}
+    kwargs = (kwargs..., N=nparticle, Sz=sz)
+    quantumnumber = A(map(fieldname->getfield(kwargs, fieldname), fieldnames(A))...)
     ndw, nup = Int(quantumnumber.N/2-quantumnumber.Sz), Int(quantumnumber.N/2+quantumnumber.Sz)
     return BinaryBases{SpinfulParticle}(spindws, ndw; Sz=-0.5*ndw) ⊗ BinaryBases{SpinfulParticle}(spinups, nup; Sz=0.5*nup)
 end
@@ -342,9 +347,9 @@ function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::SpinfulParticle, basist
         spindws = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==-1//2)
         spinups = Set{basistype}(table[Index(site, iid)] for (site, internal) in hilbert for iid in internal if iid.spin==+1//2)
         if isnan(quantumnumber.N)
-            return BinaryBases(spindws, spinups, quantumnumber.Sz; basistype=basistype)
+            return BinaryBases{SpinfulParticle}(spindws, spinups, quantumnumber.Sz)
         else
-            return BinaryBases(spindws, spinups, Int(quantumnumber.N), quantumnumber.Sz)
+            return BinaryBases{SpinfulParticle}(spindws, spinups, Int(quantumnumber.N), quantumnumber.Sz)
         end
     end
 end
