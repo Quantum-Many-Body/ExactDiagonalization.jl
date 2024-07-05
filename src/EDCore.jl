@@ -2,7 +2,7 @@ module EDCore
 
 using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization, norm
-using QuantumLattices: plain, bonds, expand, id, idtype, reparameter
+using QuantumLattices: eager, plain, bonds, expand, id, idtype, reparameter
 using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Entry, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reset!
 using SparseArrays: SparseMatrixCSC, spzeros
 using TimerOutputs: TimerOutput, @timeit
@@ -51,11 +51,9 @@ Get the CSC-formed sparse matrix representation of a set of operators.
 Here, `table` specifies the order of the operator ids.
 """
 function matrix(ops::Operators, braket::NTuple{2, Sector}, table, dtype=valtype(eltype(ops)))
-    result = spzeros(dtype, length(braket[1]), length(braket[2]))
-    for op in ops
-        result += matrix(op, braket, table, dtype)
-    end
-    return result
+    length(ops)==0 && return spzeros(dtype, length(braket[1]), length(braket[2]))
+    length(ops)==1 && return matrix(ops[1], braket, table, dtype)
+    return matrix(ops[1:length(ops)÷2], braket, table, dtype) + matrix(ops[length(ops)÷2+1:length(ops)], braket, table, dtype)
 end
 
 """
@@ -226,10 +224,12 @@ end
     return OperatorSum{E, idtype(E)}
 end
 @inline Base.valtype(R::Type{<:EDMatrixRepresentation}, M::Type{<:Operators}) = valtype(R, eltype(M))
-function (representation::EDMatrixRepresentation)(m::Operator; kwargs...)
+function (representation::EDMatrixRepresentation)(m::Union{Operator, Operators}; kwargs...)
     result = zero(valtype(representation, m))
-    for braket in representation.brakets
-        add!(result, EDMatrix(braket, matrix(m, braket, representation.table, dtype(eltype(result)); kwargs...)))
+    if isa(m, Operator) || length(m)>0
+        for braket in representation.brakets
+            add!(result, EDMatrix(braket, matrix(m, braket, representation.table, dtype(eltype(result)); kwargs...)))
+        end
     end
     return result
 end
@@ -273,7 +273,7 @@ struct ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Fron
     lattice::L
     H::G
     Hₘ::M
-    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer, delay::Bool=true) where {K<:EDKind}
+    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer, delay::Bool=false) where {K<:EDKind}
         @timeit timer "matrix" begin
             @timeit timer "prepare" Hₘ = delay ? Image(mr(empty(Entry(H))), mr, objectid(H)) : mr(H)
         end
@@ -359,18 +359,18 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 """
     ED(
         lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, targetspace::TargetSpace=TargetSpace(hilbert), dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
+        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=false
     )
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
 function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, targetspace::TargetSpace=TargetSpace(hilbert), dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
+    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=false
 )
     terms = wrapper(terms)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
-    H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert, boundary; half=false)
+    H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert, boundary, eager; half=false)
     mr = EDMatrixRepresentation{dtype}(targetspace, Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     return ED{typeof(EDKind(hilbert))}(lattice, H, mr; timer=timer, delay=delay)
 end
@@ -382,14 +382,14 @@ end
 """
     ED(
         lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
+        neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=false
     )
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
 function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::Union{Term, Tuple{Term, Vararg{Term}}}, quantumnumbers::Union{AbelianNumber, Tuple{AbelianNumber, Vararg{AbelianNumber}}}, dtype::Type{<:Number}=commontype(terms), boundary::Boundary=plain;
-    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=true
+    neighbors::Union{Nothing, Int, Neighbors}=nothing, timer::TimerOutput=edtimer, delay::Bool=false
 )
     return ED(lattice, hilbert, terms, TargetSpace(hilbert, wrapper(quantumnumbers)), dtype, boundary; neighbors=neighbors, timer=timer, delay=delay)
 end

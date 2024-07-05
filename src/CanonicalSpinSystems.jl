@@ -4,9 +4,8 @@ using Base.Iterators: product
 using LinearAlgebra: I, dot, norm
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
-using QuantumLattices: findindex, totalspin
-using QuantumLattices: AbelianNumber, AbelianNumbers, Hilbert, Metric, Operator, OperatorUnitToTuple, Spin, Sz
-using QuantumLattices: AbstractLattice, Table, Index, polar, azimuth
+using QuantumLattices: azimuth, findindex, polar, totalspin
+using QuantumLattices: AbelianNumber, AbelianNumbers, AbstractLattice, Hilbert, Index, Metric, Operator, OperatorUnitToTuple, Spin, Sz, Table
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse
 using ..EDCore: EDKind, Sector, TargetSpace, wrapper
 
