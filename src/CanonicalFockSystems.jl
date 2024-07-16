@@ -174,7 +174,7 @@ end
     BinaryBases{A}(states) where {A<:AbelianNumber}
     BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
 
-Construct a set of binary bases that subject to no quantum number conservation.
+Construct a set of binary bases that subjects to no quantum number conservation.
 """
 @inline BinaryBases(argument) = BinaryBases{ParticleNumber}(argument)
 function BinaryBases{A}(nstate::Integer) where {A<:AbelianNumber}
@@ -243,6 +243,7 @@ end
 
 """
     BinaryBases(spindws, spinups, nparticle::Integer, sz::Real)
+    BinaryBases{A}(spindws, spinups, nparticle::Integer, sz::Real; kwargs...) where {A<:AbelianNumber}
 
 Construct a set of binary bases that preserves both the particle number and the spin z component conservation.
 """

@@ -59,10 +59,8 @@ end
 """
     SpinBases(spins::Vector{<:Real})
     SpinBases(spins::Vector{<:Real}, partition::NTuple{N, AbstractVector{Int}}) where N
-    SpinBases(spins::Vector{<:Real}, quantumnumber::Sz)
-    SpinBases(spins::Vector{<:Real}, quantumnumber::Sz, partition::NTuple{N, AbstractVector{Int}}) where N
 
-Construct a set of spin bases.
+Construct a set of spin bases that subjects to no quantum number conservation.
 """
 @inline SpinBases(spins::Vector{<:Real}) = SpinBases(spins, defaultpartition(length(spins)))
 function SpinBases(spins::Vector{<:Real}, partition::NTuple{N, AbstractVector{Int}}) where N
@@ -74,6 +72,13 @@ function SpinBases(spins::Vector{<:Real}, partition::NTuple{N, AbstractVector{In
     record = Dict(ntuple(i->Sz(NaN), Val(N))=>1:prod(map(spin->Int(2*spin+1), spins)))
     return SpinBases(Sz(NaN), spins, partition, record)
 end
+
+"""
+    SpinBases(spins::Vector{<:Real}, quantumnumber::Sz)
+    SpinBases(spins::Vector{<:Real}, quantumnumber::Sz, partition::NTuple{N, AbstractVector{Int}}) where N
+
+Construct a set of spin bases that preserves the spin z component conservation.
+"""
 @inline SpinBases(spins::Vector{<:Real}, quantumnumber::Sz) = SpinBases(spins, quantumnumber, defaultpartition(length(spins)))
 function SpinBases(spins::Vector{<:Real}, quantumnumber::Sz, partition::NTuple{N, AbstractVector{Int}}) where N
     @assert !isnan(quantumnumber.Sz) "SpinBases error: when Sz is not conserved, no quantum number should be used."
