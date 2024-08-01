@@ -2,8 +2,8 @@ using ExactDiagonalization
 using ExactDiagonalization: BinaryBasisRange, sumable, productable
 using LinearAlgebra: eigen
 
-using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, id, idtype, kind, matrix, parameternames, prepare!, statistics, update!
 using QuantumLattices: AbelianNumber, Algorithm, CompositeIndex, Coupling, FID, Fock, Heisenberg, Hilbert, Hopping, Hubbard, Index, Lattice, Metric, Neighbors, Onsite, Operator, OperatorGenerator, OperatorSum, OperatorUnitToTuple, Pairing, Parameters, ParticleNumber, Spin, SpinfulParticle, Sz, Table, bonds, isintracell
+using QuantumLattices: ⊕, ⊗, add!, contentnames, dtype, getcontent, id, idtype, kind, matrix, parameternames, prepare!, statistics, update!
 
 using SparseArrays: SparseMatrixCSC
 
