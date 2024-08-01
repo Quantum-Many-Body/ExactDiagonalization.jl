@@ -5,7 +5,7 @@ using Printf: @printf
 using QuantumLattices: iscreation, periods, rank, statistics
 using QuantumLattices: AbelianNumber, Combinations, DuplicatePermutations, Fock, Hilbert, Index, Metric, Operator, Operators, OperatorUnitToTuple, ParticleNumber, SpinfulParticle, Table, VectorSpace
 using SparseArrays: SparseMatrixCSC
-using ..EDCore: ED, EDKind, EDMatrixRepresentation, Sector, TargetSpace, wrapper
+using ..EDCore: ED, EDKind, EDMatrixization, Sector, TargetSpace, wrapper
 
 import QuantumLattices: ⊗, id, matrix
 import ..EDCore: productable, sumable

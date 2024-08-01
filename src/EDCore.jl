@@ -3,14 +3,14 @@ module EDCore
 using Arpack: eigs
 using LinearAlgebra: Eigen, Factorization, norm
 using QuantumLattices: eager, plain, bonds, expand, id, idtype, reparameter
-using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, Entry, Frontend, Hilbert, Image, LinearTransformation, MatrixRepresentation, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reset!
+using QuantumLattices: AbelianNumber, AbstractLattice, Algorithm, Boundary, CategorizedGenerator, Frontend, Hilbert, Image, LinearTransformation, Matrixization, Metric, Neighbors, Operator, OperatorGenerator, OperatorPack, Operators, OperatorSum, OperatorUnit, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, reset!
 using SparseArrays: SparseMatrixCSC, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
 import QuantumLattices: Parameters, ⊕, add!, contentnames, dtype, getcontent, kind, matrix, parameternames, prepare!, statistics, update!
 
-export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixRepresentation, Sector, SectorFilter, TargetSpace, productable, release!, sumable
+export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixization, Sector, SectorFilter, TargetSpace, productable, release!, sumable
 
 """
     const edtimer = TimerOutput()
@@ -209,22 +209,22 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 end
 
 """
-    EDMatrixRepresentation{D<:Number, S<:Sector, T} <: MatrixRepresentation
+    EDMatrixization{D<:Number, S<:Sector, T} <: Matrixization
 
 Exact matrix representation of a quantum lattice system on a target Hilbert space.
 """
-struct EDMatrixRepresentation{D<:Number, S<:Sector, T} <: MatrixRepresentation
+struct EDMatrixization{D<:Number, S<:Sector, T} <: Matrixization
     brakets::Vector{Tuple{S, S}}
     table::T
-    EDMatrixRepresentation{D}(brakets::Vector{Tuple{S, S}}, table) where {D<:Number, S<:Sector} = new{D, S, typeof(table)}(brakets, table)
+    EDMatrixization{D}(brakets::Vector{Tuple{S, S}}, table) where {D<:Number, S<:Sector} = new{D, S, typeof(table)}(brakets, table)
 end
-@inline function Base.valtype(::Type{<:EDMatrixRepresentation{D, S}}, M::Type{<:Operator}) where {D<:Number, S<:Sector}
+@inline function Base.valtype(::Type{<:EDMatrixization{D, S}}, M::Type{<:Operator}) where {D<:Number, S<:Sector}
     @assert promote_type(D, valtype(M))==D "valtype error: convert $(valtype(M)) to $D is inexact."
     E = EDMatrix{S, SparseMatrixCSC{D, Int}}
     return OperatorSum{E, idtype(E)}
 end
-@inline Base.valtype(R::Type{<:EDMatrixRepresentation}, M::Type{<:Operators}) = valtype(R, eltype(M))
-function (representation::EDMatrixRepresentation)(m::Union{Operator, Operators}; kwargs...)
+@inline Base.valtype(R::Type{<:EDMatrixization}, M::Type{<:Operators}) = valtype(R, eltype(M))
+function (representation::EDMatrixization)(m::Union{Operator, Operators}; kwargs...)
     result = zero(valtype(representation, m))
     if isa(m, Operator) || length(m)>0
         for braket in representation.brakets
@@ -235,11 +235,11 @@ function (representation::EDMatrixRepresentation)(m::Union{Operator, Operators};
 end
 
 """
-    EDMatrixRepresentation{D}(target::TargetSpace, table) where {D<:Number}
+    EDMatrixization{D}(target::TargetSpace, table) where {D<:Number}
 
 Construct a exact matrix representation.
 """
-@inline EDMatrixRepresentation{D}(target::TargetSpace, table) where {D<:Number} = EDMatrixRepresentation{D}([(sector, sector) for sector in target], table)
+@inline EDMatrixization{D}(target::TargetSpace, table) where {D<:Number} = EDMatrixization{D}([(sector, sector) for sector in target], table)
 
 """
     SectorFilter{S} <: LinearTransformation
@@ -273,9 +273,9 @@ struct ED{K<:EDKind, L<:AbstractLattice, G<:OperatorGenerator, M<:Image} <: Fron
     lattice::L
     H::G
     Hₘ::M
-    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixRepresentation; timer::TimerOutput=edtimer, delay::Bool=false) where {K<:EDKind}
+    function ED{K}(lattice::AbstractLattice, H::OperatorGenerator, mr::EDMatrixization; timer::TimerOutput=edtimer, delay::Bool=false) where {K<:EDKind}
         @timeit timer "matrix" begin
-            @timeit timer "prepare" Hₘ = delay ? Image(mr(empty(Entry(H))), mr, objectid(H)) : mr(H)
+            @timeit timer "prepare" Hₘ = delay ? Image(mr(empty(CategorizedGenerator(H))), mr, objectid(H)) : mr(H)
         end
         new{K, typeof(lattice), typeof(H), typeof(Hₘ)}(lattice, H, Hₘ)
     end
@@ -371,7 +371,7 @@ function ED(
     terms = wrapper(terms)
     isnothing(neighbors) && (neighbors = maximum(term->term.bondkind, terms))
     H = OperatorGenerator(terms, bonds(lattice, neighbors), hilbert, boundary, eager; half=false)
-    mr = EDMatrixRepresentation{dtype}(targetspace, Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+    mr = EDMatrixization{dtype}(targetspace, Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     return ED{typeof(EDKind(hilbert))}(lattice, H, mr; timer=timer, delay=delay)
 end
 @inline wrapper(x) = (x,)

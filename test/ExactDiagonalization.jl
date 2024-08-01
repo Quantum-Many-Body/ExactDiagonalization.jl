@@ -129,7 +129,7 @@ end
     @test promote_type(typeof(m), ComplexF64) == EDMatrix{BinaryBases{ParticleNumber, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{ComplexF64, Int}}
 end
 
-@testset "EDMatrixRepresentation && SectorFilter" begin
+@testset "EDMatrixization && SectorFilter" begin
     indexes = [CompositeIndex(Index(i, FID{:f}(1, 0, 1)), [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
     table = Table(indexes, OperatorUnitToTuple(:site, :orbital, :spin))
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
@@ -137,13 +137,13 @@ end
     target = BinaryBases(1:4, 1)⊕BinaryBases(1:4, 2)⊕BinaryBases(1:4, 3)
     M = EDMatrix{BinaryBases{ParticleNumber, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}, SparseMatrixCSC{Float64, Int}}
 
-    mr = EDMatrixRepresentation{Float64}(target, table)
+    mr = EDMatrixization{Float64}(target, table)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
 
     ms = mr(ops)
-    mr₁ = EDMatrixRepresentation{Float64}(TargetSpace(target[1]), table)
-    mr₂ = EDMatrixRepresentation{Float64}(TargetSpace(target[2]), table)
-    mr₃ = EDMatrixRepresentation{Float64}(TargetSpace(target[3]), table)
+    mr₁ = EDMatrixization{Float64}(TargetSpace(target[1]), table)
+    mr₂ = EDMatrixization{Float64}(TargetSpace(target[2]), table)
+    mr₃ = EDMatrixization{Float64}(TargetSpace(target[3]), table)
     @test ms == mr₁(ops) + mr₂(ops) + mr₃(ops)
     @test mr₁(ops) == mr₁(op₁) + mr₁(op₂) + mr₁(op₃)
     @test mr₂(ops) == mr₂(op₁) + mr₂(op₂) + mr₂(op₃)
