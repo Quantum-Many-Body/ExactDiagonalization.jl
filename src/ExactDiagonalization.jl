@@ -1,25 +1,15 @@
 module ExactDiagonalization
 
+# Core
 include("EDCore.jl")
-include("CanonicalFockSystems.jl")
-include("CanonicalSpinSystems.jl")
+export edtimer, ED, EDEigen, EDKind, EDMatrix, EDMatrixization, Sector, SectorFilter, TargetSpace, productable, release!, sumable
+export BinaryBases, BinaryBasis, BinaryBasisRange, basistype
+export AbelianBases
+# export xyz2ang, spincoherentstates, structure_factor, Pspincoherentstates
+
+# GreenFunctions
 # include("GreenFunctions.jl")
-
-using .EDCore
-using .CanonicalFockSystems
-using .CanonicalSpinSystems
 # using .GreenFunctions
-
-# EDCore
-export ED, EDEigen, EDKind, EDMatrix, EDMatrixization, Sector, SectorFilter, TargetSpace, release!
-
-# CanonicalFockSystems
-export BinaryBases, BinaryBasis, basistype
-
-# CanonicalSpinSystems
-export SpinBases, xyz2ang, spincoherentstates, structure_factor, Pspincoherentstates
-
-#GreenFunctions
 # export Block, Partition, BlockVals, EDSolver, BlockGreenFunction, ClusterGreenFunction
 
 end # module

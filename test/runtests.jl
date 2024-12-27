@@ -2,5 +2,6 @@ using Test
 using SafeTestsets
 
 @safetestset "ExactDiagonalization" begin
-    include("ExactDiagonalization.jl")
+    @time @safetestset "EDWithBinaryBases" begin include("EDWithBinaryBases.jl") end
+    @time @safetestset "EDWithAbelianBases" begin include("EDWithAbelianBases.jl") end
 end

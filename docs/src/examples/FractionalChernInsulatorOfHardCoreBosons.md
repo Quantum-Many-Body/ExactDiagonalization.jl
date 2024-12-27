@@ -44,13 +44,13 @@ map(parameters::NamedTuple) = (
 )
 
 # terms
-t₁ = Hopping(:t₁, map(parameters).t₁, 1; modulate=false)
-t₂ = Hopping(:t₂, map(parameters).t₂, 2; modulate=false)
+t₁ = Hopping(:t₁, map(parameters).t₁, 1; ismodulatable=false)
+t₂ = Hopping(:t₂, map(parameters).t₂, 2; ismodulatable=false)
 λ₂ = Hopping(:λ₂, map(parameters).λ₂, 2;
     amplitude=bond::Bond->1im*cos(3*azimuth(rcoordinate(bond)))*(-1)^(bond[1].site%2),
-    modulate=false
+    ismodulatable=false
 )
-t₃ = Hopping(:t₃, map(parameters).t₃, 3; modulate=false)
+t₃ = Hopping(:t₃, map(parameters).t₃, 3; ismodulatable=false)
 V₁ = Coulomb(:V₁, map(parameters).V₁, 1)
 V₂ = Coulomb(:V₂, map(parameters).V₂, 2)
 

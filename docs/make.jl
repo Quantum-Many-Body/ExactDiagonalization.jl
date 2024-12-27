@@ -24,7 +24,7 @@ makedocs(;
             "man/EDCore.md",
             "man/CanonicalFockSystems.md",
             "man/CanonicalSpinSystems.md",
-            "man/GreenFunctions.md",
+            # "man/GreenFunctions.md",
         ]
     ]
 )
