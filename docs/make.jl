@@ -10,7 +10,7 @@ makedocs(;
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://Quantum-Many-Body.github.io/ExactDiagonalization.jl",
-        assets = ["assets/favicon.ico"],
+        assets=["assets/favicon.ico"],
     ),
     pages=[
         "Home" => "index.md",
@@ -20,12 +20,7 @@ makedocs(;
             "examples/HeisenbergModel.md",
             "examples/FractionalChernInsulatorOfHardCoreBosons.md",
         ],
-        "Manual" => [
-            "man/EDCore.md",
-            "man/CanonicalFockSystems.md",
-            "man/CanonicalSpinSystems.md",
-            # "man/GreenFunctions.md",
-        ]
+        "Manual" => "manul.md",
     ]
 )
 

@@ -24,7 +24,7 @@ hilbert = Hilbert(Spin{1//2}(), length(lattice))
 
 # define the quantum number of the sub-Hilbert space in which the computation to be carried out
 # for the ground state, Sz=0
-quantumnumber = Sz(0)
+quantumnumber = 𝕊ᶻ(0)
 
 # define the antiferromagnetic Heisenberg term on the nearest neighbor
 J = Heisenberg(:J, 1.0, 1)

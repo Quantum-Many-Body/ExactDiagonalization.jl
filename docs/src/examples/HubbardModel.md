@@ -24,7 +24,7 @@ hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
 
 # define the quantum number of the sub-Hilbert space in which the computation to be carried out
 # here the particle number is set to be `length(lattice)` and Sz is set to be 0
-quantumnumber = SpinfulParticle(length(lattice), 0)
+quantumnumber = ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)
 
 # define the terms, i.e. the nearest-neighbor hopping and the Hubbard interaction
 t = Hopping(:t, -1.0, 1)

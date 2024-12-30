@@ -57,7 +57,7 @@ V₂ = Coulomb(:V₂, map(parameters).V₂, 2)
 # 1/4 filling of the model, i.e., half-filling of the lower flat Chern band
 # In such case, the ground state of the model is a bosonic fractional Chern insulator
 # see Y.-F. Wang, et al. PRL 107, 146803 (2011)
-quantumnumber = ParticleNumber(length(lattice)/4)
+quantumnumber = ℕ(length(lattice)÷4)
 
 # construct the algorithm
 fci = Algorithm(

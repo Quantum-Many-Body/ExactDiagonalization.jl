@@ -703,13 +703,13 @@ function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
 end
 
 """
-    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op); kwargs...) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op))
+function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op); kwargs...)
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ndata, intermediate = 1, zeros(ket|>eltype, length(op)+1)
@@ -904,13 +904,13 @@ Get the matrix representation of an `OperatorIndex` on an Abelian graded space.
 @inline matrix(index::OperatorIndex, graded::Graded, dtype::Type{<:Number}=ComplexF64) = matrix(InternalIndex(index), graded, dtype)
 
 """
-    matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op)) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op); kwargs...) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=valtype(op))
+function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=valtype(op); kwargs...)
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
@@ -930,7 +930,7 @@ function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::Ab
     end
     return result
 end
-function matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op))
+function matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op); kwargs...)
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
