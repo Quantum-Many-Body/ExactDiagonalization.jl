@@ -839,6 +839,23 @@ Get the quantum number of a set of spin bases.
 @inline Abelian(bs::AbelianBases) = bs.quantumnumber
 
 """
+    range(bs::AbelianBases) -> AbstractVector{Int}
+
+Get the range of the target sector of an `AbelianBases` in the direct product base.
+"""
+@inline Base.range(bs::AbelianBases{ℤ₁}) = 1:dimension(bs)
+function Base.range(bs::AbelianBases)
+    result = Int[]
+    dims = reverse(map(dimension, bs.gradeds))
+    cartesian, linear = CartesianIndices(dims), LinearIndices(dims)
+    total, slice = decompose(⊗(bs.gradeds...))
+    for i in slice[range(total, bs.quantumnumber)]
+        push!(result, linear[map(getindex, reverse(bs.permutations), cartesian[i].I)...])
+    end
+    return result
+end
+
+"""
     AbelianBases(locals::AbstractVector{Int}, partition::NTuple{N, AbstractVector{Int}}=partition(length(locals))) where N
 
 Construct a set of spin bases that subjects to no quantum number conservation.
@@ -896,7 +913,7 @@ Here, `table` specifies the order of the operator indexes.
 function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=valtype(op))
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
-    ms = matrices(op, ket, table, dtype)
+    ms = matrices(op, ket.locals, table, dtype)
     intermediate = eltype(ms)[]
     for positions in ket.partition
         for (i, position) in enumerate(positions)
@@ -916,7 +933,7 @@ end
 function matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op))
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
-    ms = matrices(op, ket, table, dtype)
+    ms = matrices(op, ket.locals, table, dtype)
     intermediate = map((positions, graded, permutation)->blocks(ms[positions], graded, permutation), ket.partition, ket.gradeds, ket.permutations)
     result = SparseMatrixCOO(Int[], Int[], dtype[], dimension(bra), dimension(ket))
     for (row_keys, row_start) in pairs(bra.record)
@@ -926,12 +943,12 @@ function matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDi
     end
     return SparseMatrixCSC(result)
 end
-function matrices(op::Operator, bases::AbelianBases, table::AbstractDict, dtype)
-    result = [sparse(one(dtype)*I, dimension(internal), dimension(internal)) for internal in bases.locals]
+function matrices(op::Operator, locals::Vector{<:Graded}, table::AbstractDict, dtype)
+    result = [sparse(one(dtype)*I, dimension(internal), dimension(internal)) for internal in locals]
     for (i, index) in enumerate(op)
         position = table[index]
         i==1 && (result[position] *= op.value)
-        result[position] *= sparse(matrix(index, bases.locals[position], dtype))
+        result[position] *= sparse(matrix(index, locals[position], dtype))
     end
     return result
 end
