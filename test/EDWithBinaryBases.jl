@@ -22,7 +22,7 @@ using SparseArrays: SparseMatrixCSC
     @test isone(basis, 1)==true && isone(basis, 2)==false && isone(basis, 3)==true
     @test zero(basis, 1) == BinaryBasis(4)
     @test iszero(basis, 1)==false && iszero(basis, 2)==true && iszero(basis, 3)==false
-    @test count(basis, 1, 1)==1 && count(basis, 1, 2)==1 && count(basis, 1, 3)==2 && count(basis, 2, 3)==1
+    @test count(basis)==2 && count(basis, 1, 1)==1 && count(basis, 1, 2)==1 && count(basis, 1, 3)==2 && count(basis, 2, 3)==1
     @test basis == BinaryBasis([1]) ⊗ BinaryBasis([3])
 end
 
@@ -67,6 +67,7 @@ end
     bsdw = BinaryBases(1:2, ℕ(1)) ⊠ 𝕊ᶻ(-1//2)
     bsup = BinaryBases(3:4, ℕ(1)) ⊠ 𝕊ᶻ(1//2)
     bs = bsdw ⊗ bsup
+    @test bs == BinaryBases(1:2, 3:4, ℕ(2) ⊠ 𝕊ᶻ(0))
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
     @test string(bs) == "{2^[1 2]: ℕ(1) ⊠ 𝕊ᶻ(-1/2)} ⊗ {2^[3 4]: ℕ(1) ⊠ 𝕊ᶻ(1/2)}"
     @test Abelian(bs) ==  ℕ(2) ⊠ 𝕊ᶻ(0)
@@ -74,6 +75,7 @@ end
     bsdw = 𝕊ᶻ(-1//2) ⊠ BinaryBases(1:2, ℕ(1))
     bsup = 𝕊ᶻ(1//2) ⊠ BinaryBases(3:4, ℕ(1))
     bs = bsdw ⊗ bsup
+    @test bs == BinaryBases(1:2, 3:4, 𝕊ᶻ(0) ⊠ ℕ(2))
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
     @test string(bs) == "{2^[1 2]: 𝕊ᶻ(-1/2) ⊠ ℕ(1)} ⊗ {2^[3 4]: 𝕊ᶻ(1/2) ⊠ ℕ(1)}"
     @test Abelian(bs) ==  𝕊ᶻ(0) ⊠ ℕ(2)
@@ -209,6 +211,9 @@ end
     eigensystem = eigen(prepare!(ed); nev=1)
     values, vectors, sectors = eigensystem
     @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors
+    @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
+    @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
+    eigensystem = eigen(matrix(ed); nev=1)
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 

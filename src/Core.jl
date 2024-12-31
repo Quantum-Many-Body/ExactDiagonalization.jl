@@ -670,8 +670,8 @@ function BinaryBases(spindws, spinups, spinfulparticle::Abelian[ℕ ⊠ 𝕊ᶻ]
     return basesdw ⊗ basesup
 end
 function BinaryBases(spindws, spinups, spinfulparticle::Abelian[𝕊ᶻ ⊠ ℕ])
-    ndw = Int(values(spinfulparticle)[1]/2-values(spinfulparticle)[2])
-    nup = Int(values(spinfulparticle)[1]/2+values(spinfulparticle)[2])
+    ndw = Int(values(spinfulparticle)[2]/2-values(spinfulparticle)[1])
+    nup = Int(values(spinfulparticle)[2]/2+values(spinfulparticle)[1])
     basesdw = 𝕊ᶻ(-ndw//2) ⊠ BinaryBases(spindws, ℕ(ndw))
     basesup = 𝕊ᶻ(nup//2) ⊠ BinaryBases(spinups, ℕ(nup))
     return basesdw ⊗ basesup

@@ -118,6 +118,7 @@ end
 @testset "TargetSpace" begin
     hilbert = Hilbert(Spin{1//2}(), 2)
     table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    @test TargetSpace(hilbert, table) == TargetSpace([AbelianBases([2, 2])], table)
     @test TargetSpace(hilbert, 𝕊ᶻ(0), table) ==  TargetSpace([AbelianBases([Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)', Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)'], 𝕊ᶻ(0))], table)
 end
 
