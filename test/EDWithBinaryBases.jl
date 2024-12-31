@@ -1,5 +1,4 @@
 using ExactDiagonalization
-using LinearAlgebra: eigen
 using QuantumLattices: Abelian, Algorithm, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Table, 𝕔, ℕ, 𝕊ᶻ, ℤ₁
 using QuantumLattices: ⊕, ⊗, ⊠, add!, dimension, getcontent, id, idtype, kind, matrix, parameternames, prepare!, scalartype, update!
 using SparseArrays: SparseMatrixCSC
