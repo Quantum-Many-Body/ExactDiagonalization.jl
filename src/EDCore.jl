@@ -1,6 +1,6 @@
-using Arpack: eigs
 using Base.Iterators: product
-using LinearAlgebra: I, Eigen, Factorization, Hermitian, norm
+using KrylovKit: eigsolve
+using LinearAlgebra: I, Factorization, norm
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, statistics, totalspin, value
@@ -148,23 +148,6 @@ Construct a matrix representation when
 @inline EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector}) = EDMatrix(m, braket[1], braket[2])
 
 """
-    eigen(m::EDMatrix; nev=1, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=scalartype(m)[]) -> Eigen
-
-Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
-"""
-@inline function eigen(m::EDMatrix; nev=1, which=:SR, tol=0.0, maxiter=300, sigma=nothing, v₀=scalartype(m)[])
-    @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket Hilbert spaces."
-    if size(m.matrix)[1] > 1
-        eigvals, eigvecs = eigs(m.matrix; nev=nev, which=which, tol=tol, maxiter=maxiter, sigma=sigma, ritzvec=true, v0=v₀)
-        @assert norm(imag(eigvals))<10^-14 "eigen error: non-vanishing imaginary parts of the eigen values."
-        eigvals = real(eigvals)
-    else
-        eigvals, eigvecs = eigen(Hermitian(collect(m.matrix)))
-    end
-    return Eigen(eigvals, eigvecs)
-end
-
-"""
     EDEigen{V<:Number, T<:Number, S<:Sector} <: Factorization{T}
 
 Eigen decomposition in exact diagonalization method.
@@ -183,12 +166,30 @@ end
 @inline Base.iterate(content::EDEigen, ::Val{:done}) = nothing
 
 """
+    eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigen
+
+Solve the eigen problem by the restarted Lanczos method provided by the [KrylovKit](https://github.com/Jutho/KrylovKit.jl) package.
+"""
+@inline function eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0)
+    @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket Hilbert spaces."
+    eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which, scalartype(m); krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+    if length(eigvals) > nev
+        eigvals = eigvals[1:nev]
+        eigvecs = eigvecs[1:nev]
+    end
+    return EDEigen(eigvals, eigvecs, fill(m.bra, length(eigvals)))
+end
+
+"""
     eigen(
         ms::OperatorSum{<:EDMatrix};
         nev::Int=1,
-        tol::Real=0.0,
+        which::Symbol=:SR,
+        tol::Real=1e-12,
         maxiter::Int=300,
-        v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:Abelian, <:AbstractVector}}=scalartype(ms)[],
+        v₀::Union{Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}, Dict{<:Sector, <:Union{AbstractVector{<:Number}, Int}}}=Dict(Abelian(m.ket)=>dimension(m.ket) for m in ms),
+        krylovdim::Int=max(20, 2*nev+1),
+        verbosity::Int=0,
         timer::TimerOutput=edtimer
     ) -> EDEigen
 
@@ -197,23 +198,25 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 @inline function eigen(
     ms::OperatorSum{<:EDMatrix};
     nev::Int=1,
-    tol::Real=0.0,
+    which::Symbol=:SR,
+    tol::Real=1e-12,
     maxiter::Int=300,
-    v₀::Union{AbstractVector, Dict{<:Sector, <:AbstractVector}, Dict{<:Abelian, <:AbstractVector}}=scalartype(ms)[],
+    v₀::Union{Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}, Dict{<:Sector, <:Union{AbstractVector{<:Number}, Int}}}=Dict(m.ket=>dimension(m.ket) for m in ms),
+    krylovdim::Int=max(20, 2*nev+1),
+    verbosity::Int=0,
     timer::TimerOutput=edtimer
 )
     @timeit timer "eigen" begin
-        isa(v₀, AbstractVector) && (v₀ = Dict(m.ket=>v₀ for m in ms))
-        isa(v₀, Dict{<:Abelian, <:AbstractVector}) && (v₀ = Dict(m.ket=>get(v₀, Abelian(m.ket), scalartype(ms)[]) for m in ms))
         values, vectors, sectors = real(scalartype(ms))[], Vector{scalartype(ms)}[], eltype(idtype(eltype(ms)))[]
+        isa(v₀, Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}) && (v₀ = Dict(m.ket=>get(v₀, Abelian(m.ket), dimension(m.ket)) for m in ms))
         for m in ms
             @timeit timer string(Abelian(m.ket)) begin
                 k = min(dimension(m.ket), nev)
-                eigensystem = eigen(m; nev=k, which=:SR, tol=tol, maxiter=maxiter, v₀=get(v₀, m.ket, scalartype(ms)[]))
+                eigensystem = eigen(m; nev=k, which=which, tol=tol, maxiter=maxiter, v₀=get(v₀, Abelian(m.ket), dimension(m.ket)), krylovdim=krylovdim, verbosity=verbosity)
                 for i = 1:k
                     push!(values, eigensystem.values[i])
-                    push!(vectors, eigensystem.vectors[:, i])
-                    push!(sectors, m.ket)
+                    push!(vectors, eigensystem.vectors[i])
+                    push!(sectors, eigensystem.sectors[i])
                 end
             end
         end

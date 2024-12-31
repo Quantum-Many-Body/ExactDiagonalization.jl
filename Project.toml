@@ -4,7 +4,6 @@ authors = ["waltergu <waltergu1989@gmail.com>"]
 version = "0.2.0"
 
 [deps]
-Arpack = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LuxurySparse = "d05aeea4-b7d4-55ac-b691-9e7fabb07ba2"
@@ -14,11 +13,11 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-Arpack = "0.5"
+KrylovKit = "0.8"
 LinearAlgebra = "1.9 - 1"
 LuxurySparse = "0.7"
 Printf = "1.9 - 1"
-QuantumLattices = "0.10.5"
+QuantumLattices = "0.11.0"
 SparseArrays = "1.9 - 1"
 TimerOutputs = "0.5"
 julia = "1.10 - 1.11"

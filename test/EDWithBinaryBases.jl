@@ -69,14 +69,14 @@ end
     bsup = BinaryBases(3:4, ℕ(1)) ⊠ 𝕊ᶻ(1//2)
     bs = bsdw ⊗ bsup
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
-    @test string(bs) == "{2^[1 2]: Abelian[ℕ ⊠ 𝕊ᶻ](1, -1/2)} ⊗ {2^[3 4]: Abelian[ℕ ⊠ 𝕊ᶻ](1, 1/2)}"
+    @test string(bs) == "{2^[1 2]: ℕ(1) ⊠ 𝕊ᶻ(-1/2)} ⊗ {2^[3 4]: ℕ(1) ⊠ 𝕊ᶻ(1/2)}"
     @test Abelian(bs) ==  ℕ(2) ⊠ 𝕊ᶻ(0)
 
     bsdw = 𝕊ᶻ(-1//2) ⊠ BinaryBases(1:2, ℕ(1))
     bsup = 𝕊ᶻ(1//2) ⊠ BinaryBases(3:4, ℕ(1))
     bs = bsdw ⊗ bsup
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
-    @test string(bs) == "{2^[1 2]: Abelian[𝕊ᶻ ⊠ ℕ](-1/2, 1)} ⊗ {2^[3 4]: Abelian[𝕊ᶻ ⊠ ℕ](1/2, 1)}"
+    @test string(bs) == "{2^[1 2]: 𝕊ᶻ(-1/2) ⊠ ℕ(1)} ⊗ {2^[3 4]: 𝕊ᶻ(1/2) ⊠ ℕ(1)}"
     @test Abelian(bs) ==  𝕊ᶻ(0) ⊠ ℕ(2)
 
     @test match(BinaryBases(2), BinaryBases(1:2))
@@ -125,7 +125,7 @@ end
     v = [0.1373584690371194, -0.5296230084669367, 0.274716938074239, 0.5707844108834217, -0.5296230084669369, 0.13735846903711957]
     values, vectors = eigen(m)
     @test isapprox(values[1], e; atol=10^-10)
-    @test isapprox(vectors[:, 1], v; atol=10^-10) || isapprox(vectors[:, 1], -v; atol=10^-10)
+    @test isapprox(vectors[1], v; atol=10^-10) || isapprox(vectors[1], -v; atol=10^-10)
     values, vectors, sectors = eigen(OperatorSum(m))
     @test isapprox(values[1], e; atol=10^-10)
     @test isapprox(vectors[1], v; atol=10^-10) || isapprox(vectors[1], -v; atol=10^-10)
