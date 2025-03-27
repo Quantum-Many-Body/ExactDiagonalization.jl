@@ -13,7 +13,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [compat]
-KrylovKit = "0.8"
+KrylovKit = "0.9"
 LinearAlgebra = "1.10 - 1"
 LuxurySparse = "0.7"
 Printf = "1.9 - 1"

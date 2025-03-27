@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.1"
+julia_version = "1.11.4"
 manifest_format = "2.0"
 project_hash = "372864f14a1e8b8f446821bd1352bfc74ef3cc75"
 
@@ -29,9 +29,9 @@ version = "1.1.1+0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
-git-tree-sha1 = "1d0a14036acb104d9e89698bd408f63ab58cdc82"
+git-tree-sha1 = "4e1fe97fdaed23e9dc21d4d664bea76b65fc50a0"
 uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-version = "0.18.20"
+version = "0.18.22"
 
 [[deps.Dates]]
 deps = ["Printf"]
@@ -85,9 +85,9 @@ version = "1.4.0"
 
 [[deps.Latexify]]
 deps = ["Format", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Requires"]
-git-tree-sha1 = "ce5f5621cac23a86011836badfedf664a612cee4"
+git-tree-sha1 = "cd714447457c660382fe634710fb56eb255ee42e"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.5"
+version = "0.16.6"
 
     [deps.Latexify.extensions]
     DataFramesExt = "DataFrames"
@@ -113,10 +113,9 @@ uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 version = "1.11.0"
 
 [[deps.MacroTools]]
-deps = ["Markdown", "Random"]
-git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
+git-tree-sha1 = "72aebe0b5051e5143a079a4685a46da330a40472"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.13"
+version = "0.5.15"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -139,9 +138,9 @@ uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 version = "0.3.27+1"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "12f1439c4f986bb868acda6ea33ebc78e19b95ad"
+git-tree-sha1 = "cc4054e898b852042d7b503313f7ad03de99c3dd"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.7.0"
+version = "1.8.0"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -162,9 +161,9 @@ version = "1.11.0"
 
 [[deps.QuantumLattices]]
 deps = ["DataStructures", "DelimitedFiles", "Format", "HalfIntegers", "InteractiveUtils", "LaTeXStrings", "Latexify", "LinearAlgebra", "NearestNeighbors", "Printf", "Random", "RecipesBase", "Serialization", "SparseArrays", "StaticArrays", "TimerOutputs"]
-git-tree-sha1 = "376045198666c433d0220356f8373153ea2cbc41"
+git-tree-sha1 = "3b69b998fa7fcb10fa9be9145d507e53f45ea5df"
 uuid = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
-version = "0.11.0"
+version = "0.11.1"
 
 [[deps.Random]]
 deps = ["SHA"]
@@ -179,9 +178,9 @@ version = "1.3.4"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
-git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.3.0"
+version = "1.3.1"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -203,9 +202,9 @@ version = "1.11.0"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
-git-tree-sha1 = "47091a0340a675c738b1304b58161f3b0839d454"
+git-tree-sha1 = "0feb6b9031bd5c51f9072393eb5ab3efd31bf9e4"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.9.10"
+version = "1.9.13"
 
     [deps.StaticArrays.extensions]
     StaticArraysChainRulesCoreExt = "ChainRulesCore"
@@ -253,9 +252,15 @@ version = "1.11.0"
 
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "Printf"]
-git-tree-sha1 = "d7298ebdfa1654583468a487e8e83fae9d72dac3"
+git-tree-sha1 = "f57facfd1be61c42321765d3551b3df50f7e09f6"
 uuid = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-version = "0.5.26"
+version = "0.5.28"
+
+    [deps.TimerOutputs.extensions]
+    FlameGraphsExt = "FlameGraphs"
+
+    [deps.TimerOutputs.weakdeps]
+    FlameGraphs = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
