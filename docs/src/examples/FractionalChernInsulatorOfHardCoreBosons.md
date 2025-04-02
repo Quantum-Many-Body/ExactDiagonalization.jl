@@ -61,8 +61,10 @@ quantumnumber = ℕ(length(lattice)÷4)
 
 # construct the algorithm
 fci = Algorithm(
-    :FCI, ED(lattice, hilbert, (t₁, t₂, λ₂, t₃, V₁, V₂), quantumnumber, boundary);
-    parameters=parameters, map=map
+    :FCI,
+    ED(lattice, hilbert, (t₁, t₂, λ₂, t₃, V₁, V₂), quantumnumber, boundary),
+    parameters,
+    map
 )
 
 # define the boundary angles and number of energy levels to be computed
