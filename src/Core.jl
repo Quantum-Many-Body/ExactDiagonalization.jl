@@ -9,7 +9,7 @@ using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, sp
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
-import QuantumLattices: Graded, Parameters, ⊠, ⊗, ⊕, add!, dimension, getcontent, id, kind, matrix, parameternames, partition, prepare!, scalartype, update!
+import QuantumLattices: Data, Graded, Parameters, ⊠, ⊗, ⊕, add!, dimension, getcontent, id, kind, matrix, options, parameternames, partition, run!, scalartype, update!
 
 # Basics for exact diagonalization method
 """
@@ -148,25 +148,25 @@ Construct a matrix representation when
 @inline EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector}) = EDMatrix(m, braket[1], braket[2])
 
 """
-    EDEigen{V<:Number, T<:Number, S<:Sector} <: Factorization{T}
+    EDEigenData{V<:Number, T<:Number, S<:Sector} <: Data
 
 Eigen decomposition in exact diagonalization method.
 
-Compared to the usual eigen decomposition `Eigen`, `EDEigen` contains a `:sectors` attribute to store the sectors of Hilbert space in which the eigen values and eigen vectors are computed.
-Furthermore, given that in different sectors the dimensions of the sub-Hilbert spaces can also be different, the `:vectors` attribute of `EDEigen` is a vector of vector instead of a matrix.
+Compared to the usual eigen decomposition `Eigen`, `EDEigenData` contains a `:sectors` attribute to store the sectors of Hilbert space in which the eigen values and eigen vectors are computed.
+Furthermore, given that in different sectors the dimensions of the sub-Hilbert spaces can also be different, the `:vectors` attribute of `EDEigenData` is a vector of vector instead of a matrix.
 """
-struct EDEigen{V<:Number, T<:Number, S<:Sector} <: Factorization{T}
+struct EDEigenData{V<:Number, T<:Number, S<:Sector} <: Data
     values::Vector{V}
     vectors::Vector{Vector{T}}
     sectors::Vector{S}
 end
-@inline Base.iterate(content::EDEigen) = (content.values, Val(:vectors))
-@inline Base.iterate(content::EDEigen, ::Val{:vectors}) = (content.vectors, Val(:sectors))
-@inline Base.iterate(content::EDEigen, ::Val{:sectors}) = (content.sectors, Val(:done))
-@inline Base.iterate(content::EDEigen, ::Val{:done}) = nothing
+@inline Base.iterate(content::EDEigenData) = (content.values, Val(:vectors))
+@inline Base.iterate(content::EDEigenData, ::Val{:vectors}) = (content.vectors, Val(:sectors))
+@inline Base.iterate(content::EDEigenData, ::Val{:sectors}) = (content.sectors, Val(:done))
+@inline Base.iterate(content::EDEigenData, ::Val{:done}) = nothing
 
 """
-    eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigen
+    eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the [KrylovKit](https://github.com/Jutho/KrylovKit.jl) package.
 """
@@ -177,7 +177,7 @@ Solve the eigen problem by the restarted Lanczos method provided by the [KrylovK
         eigvals = eigvals[1:nev]
         eigvecs = eigvecs[1:nev]
     end
-    return EDEigen(eigvals, eigvecs, fill(m.bra, length(eigvals)))
+    return EDEigenData(eigvals, eigvecs, fill(m.bra, length(eigvals)))
 end
 
 """
@@ -191,7 +191,7 @@ end
         krylovdim::Int=max(20, 2*nev+1),
         verbosity::Int=0,
         timer::TimerOutput=edtimer
-    ) -> EDEigen
+    ) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
@@ -222,7 +222,7 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
         end
         nev>length(values) && @warn("Requested number ($nev) of eigen values exceeds the maximum available ($(length(values))).")
         perm = sortperm(values)[1:min(nev, length(values))]
-        result = EDEigen(values[perm], vectors[perm], sectors[perm])
+        result = EDEigenData(values[perm], vectors[perm], sectors[perm])
     end
     return result
 end
@@ -360,8 +360,8 @@ function matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs.
 end
 
 """
-    eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> EDEigen
-    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) -> EDEigen
+    eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> EDEigenData
+    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
@@ -437,6 +437,13 @@ Get the binary basis type corresponding to an integer or a type of an integer.
     BinaryBasis{I<:Unsigned}
 
 Binary basis represented by an unsigned integer.
+
+Here, we adopt the following common rules:
+1. In a binary basis, a bit of an unsigned integer represents a single-particle state that can be occupied (`1`) or unoccupied (`0`).
+2. The position of this bit in the unsigned integer counting from the right corresponds to the sequence of the single-particle state specified by a table.
+3. When representing a many-body state by creation operators, they are arranged in ascending order according to their sequences.
+
+In this way, any many-body state of canonical fermionic or hardcore bosonic systems can be represented ambiguously by the binary bases, e.g., ``c^†_2c^†_3c^†_4|\\text{Vacuum}\\rangle`` is represented by ``1110``.
 """
 struct BinaryBasis{I<:Unsigned}
     rep::I
@@ -460,7 +467,7 @@ end
     BinaryBasis(states; filter=index->true)
     BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
 
-Construct a binary basis with the given occupied orbitals.
+Construct a binary basis with the given occupied states.
 """
 @inline BinaryBasis(states; filter=index->true) = BinaryBasis{basistype(eltype(states))}(states; filter=filter)
 function BinaryBasis{I}(states; filter=index->true) where {I<:Unsigned}
@@ -475,7 +482,7 @@ end
     iterate(basis::BinaryBasis)
     iterate(basis::BinaryBasis, state)
 
-Iterate over the numbers of the occupied single-particle orbitals.
+Iterate over the numbers of the occupied single-particle states.
 """
 function Base.iterate(basis::BinaryBasis, state=(0, basis.rep))
     pos, rep = state
@@ -804,6 +811,14 @@ Get the default partition of n local Hilbert spaces.
     AbelianBases{A<:Abelian, N} <: Sector
 
 A set of Abelian bases, that is, a set of bases composed from the product of local Abelian Graded spaces.
+
+To improve the efficiency of the product of local Abelian Graded spaces, we adopt a two-step strategy:
+1) partition the local spaces into several groups in each of which the local spaces are direct producted and rearranged according to the Abelian quantum numbers, and then 
+2) glue the results obtained in the previous step so that a sector with a certain Abelian quantum number can be targeted.
+
+In principle, a binary-tree strategy can be more efficient, but our two-step strategy is enough for a quantum system that can be solved by the exact diagonalization method.
+
+The partition of the local Abelian Graded spaces is assigned by a `NTuple{N, Vector{Int}}`, with each of its element contains the sequences of the grouped local spaces specified by a table.
 """
 struct AbelianBases{A<:Abelian, N} <: Sector
     quantumnumber::A
@@ -837,14 +852,14 @@ end
 """
     Abelian(bs::AbelianBases)
 
-Get the quantum number of a set of spin bases.
+Get the Abelian quantum number of a set of spin bases.
 """
 @inline Abelian(bs::AbelianBases) = bs.quantumnumber
 
 """
     range(bs::AbelianBases) -> AbstractVector{Int}
 
-Get the range of the target sector of an `AbelianBases` in the direct product base.
+Get the range of the target sector of an `AbelianBases` in the direct producted bases.
 """
 @inline Base.range(bs::AbelianBases{ℤ₁}) = 1:dimension(bs)
 function Base.range(bs::AbelianBases)
@@ -870,7 +885,7 @@ end
 """
     AbelianBases(locals::Vector{Graded{A}}, quantumnumber::A, partition::NTuple{N, AbstractVector{Int}}=partition(length(locals))) where {N, A<:Abelian}
 
-Construct a set of spin bases that preserves a certain symmetry specified by the corresponding quantum number.
+Construct a set of spin bases that preserves a certain symmetry specified by the corresponding Abelian quantum number.
 """
 function AbelianBases(locals::Vector{Graded{A}}, quantumnumber::A, partition::NTuple{N, AbstractVector{Int}}=partition(length(locals))) where {N, A<:Abelian}
     gradeds, permutations, total, records = intermediate(locals, partition, quantumnumber)
@@ -1005,8 +1020,13 @@ Decompose a local spin space into an Abelian graded space that preserves 1) no s
 
 Get the matrix representation of a `SpinIndex` on an Abelian graded space.
 """
-@inline function matrix(index::SpinIndex, graded::Graded, dtype::Type{<:Number}=ComplexF64)
-    @assert Int(2*totalspin(index)+1)==dimension(graded) "matrix: mismatched spin index and Abelian graded space."
+@inline function matrix(index::SpinIndex, graded::Graded{ℤ₁}, dtype::Type{<:Number}=ComplexF64)
+    @assert Int(2*totalspin(index)+1)==dimension(graded) "matrix error: mismatched spin index and Abelian graded space."
+    return matrix(index, dtype)
+end
+@inline function matrix(index::SpinIndex, graded::Graded{𝕊ᶻ}, dtype::Type{<:Number}=ComplexF64)
+    S = totalspin(index)
+    @assert Int(2S+1)==dimension(graded)==length(graded) && first(graded)==𝕊ᶻ(S) && last(graded)==𝕊ᶻ(-S) "matrix error: mismatched spin index and Abelian graded space."
     return matrix(index, dtype)
 end
 
@@ -1040,7 +1060,7 @@ end
 @inline function sorted_locals(::Type{A}, hilbert::Hilbert, table::AbstractDict) where {A<:Abelian}
     result = Graded{A}[Graded{A}(internal) for internal in values(hilbert)]
     sites = collect(keys(hilbert))
-    perm = sortperm(sites; by=site->table[𝕊(site, 'z')])
+    perm = sortperm(sites; by=site->table[𝕊(site, :α)])
     return permute!(result, perm)
 end
 
@@ -1057,111 +1077,3 @@ function TargetSpace(hilbert::Hilbert{<:Spin}, quantumnumbers::OneOrMore{A}, tab
     sectors = [AbelianBases{A, N}(quantumnumber, locals, partition, gradeds, permutations, records[i], dimension(total, quantumnumber)) for (i, quantumnumber) in enumerate(quantumnumbers)]
     return TargetSpace(sectors, table)
 end
-
-# function xyz2ang(spins::Dict{Int, Vector{T}}) where {T<:Real}
-#     out = Matrix{Float64}(undef, 2, length(spins))
-#     for (i, k) in spins
-#         @assert length(k)==3 "xyz2ang error: incomplete spin components."
-#         out[1, i] = polar(k)
-#         out[2, i] = azimuth(k)
-#     end
-#     return out
-# end
-# function xyz2ang(spins::Matrix{T}) where {T<:Real}
-#     @assert size(spins, 1)==3 "xyz2ang error: incomplete spin components."
-#     out = Matrix{Float64}(undef, 2, size(spins, 2))
-#     for i = size(spins, 2)
-#         k = spins[:, i]
-#         out[1, i] = polar(k)
-#         out[2, i] = azimuth(k)
-#     end
-#     return out
-# end
-
-# """
-#     spincoherentstates(structure::Matrix{Float64}) -> Matrix{Float64}
-
-# Get the spin coherent states from the input spin structures specified by the polar and azimuth angles.
-# """
-# function spincoherentstates(structure::Matrix{Float64})
-#     @assert size(structure, 1)==2 "spincoherentstates error: spin structures must be specified by the polar and azimuth angles of a spin orientation."
-#     out = [[exp(im/2*structure[2, i])*sin(structure[1, i]/2), exp(-im/2*structure[2, i])*cos(structure[1, i]/2)] for i=1:size(structure, 2)]
-#     return kron(out...)
-# end
-
-# """
-#     structure_factor(lattice::AbstractLattice, bs::AbelianBases, hilbert::Hilbert, scs::AbstractVector{T}, k::Vector{Float64}) where {T<:Number} -> [SxSx(k), SySy(k), SzSz(k)]
-#     structure_factor(lattice::AbstractLattice, bs::AbelianBases, hilbert::Hilbert, scs::AbstractVector{T}; Nk::Int=60) where {T<:Number} -> Matrix(3, Nk, Nk)
-
-# Get structure_factor of state "scs".
-# """
-# function structure_factor(lattice::AbstractLattice, bs::AbelianBases, hilbert::Hilbert, scs::AbstractVector{T}, k::Vector{Float64}) where {T<:Number}
-#     N = length(lattice)
-#     table = Table(hilbert, OperatorIndexToTuple(:site))
-#     base = (bs, bs)
-#     sq = zeros(ComplexF64, 3)
-#     for j=1:N, i=1:N
-#         phase = exp(im*dot(k, lattice[i]-lattice[j]))
-#         xx = Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1]))
-#         yy = Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2]))
-#         zz = Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3]))
-#         mx = matrix(xx, base, table, ComplexF64)
-#         my = matrix(yy, base, table, ComplexF64)
-#         mz = matrix(zz, base, table, ComplexF64)
-#         sq[1] += real(dot(scs, mx, scs))*phase
-#         sq[2] += real(dot(scs, my, scs))*phase
-#         sq[3] += real(dot(scs, mz, scs))*phase
-#     end
-#     return real.(sq)/N
-# end
-# function structure_factor(lattice::AbstractLattice, bs::AbelianBases, hilbert::Hilbert, scs::AbstractVector{T}; Nk::Int=60) where {T<:Number}
-#     N = length(lattice)
-#     table = Table(hilbert, OperatorIndexToTuple(:site))
-#     base = (bs, bs)
-#     ks = range(-2pi, 2pi, length=Nk+1)
-#     ss = Array{Float64}(undef, 3, N, N)
-#     for j=1:N, i=1:N
-#         xx = Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1]))
-#         yy = Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2]))
-#         zz = Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3]))
-#         mx = matrix(xx, base, table, ComplexF64)
-#         ss[1, i, j] = real(dot(scs, mx, scs))
-#         my = matrix(yy, base, table, ComplexF64)
-#         ss[2, i, j] = real(dot(scs, my, scs))
-#         mz = matrix(zz, base, table, ComplexF64)
-#         ss[3, i, j] = real(dot(scs, mz, scs))
-#     end
-#     sq = zeros(ComplexF64, 3, Nk+1, Nk+1)
-#     for x=1:Nk+1, y=1:Nk+1
-#         ki = [ks[x], ks[y]]
-#         for j=1:N, i=1:N
-#             phase = exp(im*dot(ki, lattice[i]-lattice[j]))
-#             sq[1, x, y] += ss[1,i,j] * phase
-#             sq[2, x, y] += ss[2,i,j] * phase
-#             sq[3, x, y] += ss[3,i,j] * phase
-#         end
-#     end
-#     return ks, real.(sq)/N
-# end
-
-# """
-#     Pspincoherentstates(scs::AbstractVector{T}, spins::Dict{Vector{Int}, Vector{Float64}}; N::Int=100) where {T<:Number}
-
-# Get square of the Projectors of state "scs" onto spincoherentstates.
-# """
-# function Pspincoherentstates(scs::AbstractVector{T}, spins::Dict{Vector{Int}, Vector{Float64}}; N::Int=100) where {T<:Number}
-#     L = spins|>keys.|>length|>sum
-#     @assert sort(cat(keys(spins)...,dims=1))==1:L|>collect "Pspincoherentstates error: the lattices are not matching."
-#     s = range(0, pi, length=N)
-#     p = range(0, 2*pi, length=N)
-#     out = Matrix{Float64}(undef, N, N)
-#     for i=1:N, j=1:N
-#         ss = zeros(2, L)
-#         for (k, v) in spins
-#             ss[:, k] .= [s[i], p[j]] + v
-#         end
-#         scst = spincoherentstates(ss)
-#         out[j, i] = abs(dot(scst, scs))^2
-#     end
-#     return s, p, out
-# end

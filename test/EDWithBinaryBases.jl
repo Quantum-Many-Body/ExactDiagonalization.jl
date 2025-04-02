@@ -1,6 +1,6 @@
 using ExactDiagonalization
 using QuantumLattices: Abelian, Algorithm, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Table, 𝕔, ℕ, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊕, ⊗, ⊠, add!, dimension, getcontent, id, idtype, kind, matrix, parameternames, prepare!, scalartype, update!
+using QuantumLattices: ⊕, ⊗, ⊠, add!, dimension, getcontent, id, idtype, kind, matrix, parameternames, scalartype, update!
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -113,7 +113,7 @@ end
     @test matrix(ops[3]'*ops[1], braket, table) == SparseMatrixCSC(6, 6, [1, 2, 2, 2, 3, 3, 3], [3, 6], [-4.0, 4.0])
 end
 
-@testset "EDMatrix & EDEigen" begin
+@testset "EDMatrix & EDEigenData" begin
     m = EDMatrix(SparseMatrixCSC(6, 6, [1, 3, 6, 9, 11, 14, 16], [1, 2, 1, 3, 4, 2, 3, 5, 2, 5, 3, 4, 6, 5, 6], [2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0]), BinaryBases(1:4, ℕ(2)))
     @test m == EDMatrix(m.matrix, m.bra, m.ket) == EDMatrix(m.matrix, (m.bra, m.ket))
     @test parameternames(typeof(m)) == (:value, :sector)

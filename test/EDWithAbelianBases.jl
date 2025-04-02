@@ -1,6 +1,6 @@
 using ExactDiagonalization
 using QuantumLattices: Abelian, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊠, dimension, id, matrix, partition, prepare!
+using QuantumLattices: ⊠, dimension, id, matrix, partition
 using SparseArrays: SparseMatrixCSC
 
 @testset "AbelianBases" begin
@@ -135,23 +135,3 @@ end
     eigensystem = eigen(matrix(prepare!(ed)); nev=6)
     @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
 end
-
-# @testset "spincoherentstates" begin
-#     unitcell = Lattice([0.0, 0.0], [0.0, √3/3]; vectors=[[1.0, 0.0], [0.5, √3/2]])
-#     lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
-
-#     spins = Dict(i=>(isodd(i) ? [0, 0, 1] : [0, 0, -1]) for i=1:length(lattice))
-#     state = spincoherentstates(xyz2ang(spins))
-#     @test findmax(state.|>abs) == (1.0, 171)
-
-#     hilbert = Hilbert(Spin{1//2}(), length(lattice))
-#     targetspace = TargetSpace(hilbert)
-
-#     k, s = structure_factor(lattice, targetspace[1], hilbert, state)
-#     @test isapprox(s[3, 2, 11], 1.418439381905401)
-#     @test isapprox(structure_factor(lattice, targetspace[1], hilbert, state, [0.0, 4*pi/sqrt(3)])[3], 1.25)
-
-#     sp = Dict(1:2:length(lattice)|>collect=>[0.0, 0.0], 2:2:length(lattice)|>collect=>[pi, 0.0])
-#     seta, p, pscs = Pspincoherentstates(state, sp)
-#     @test isapprox(pscs[:, 1], [1.0 for _=1:length(pscs[:, 1])])
-# end
