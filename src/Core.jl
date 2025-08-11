@@ -1,10 +1,10 @@
 using Base.Iterators: product
 using KrylovKit: eigsolve
-using LinearAlgebra: I
+using LinearAlgebra: I, dot
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
-using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, statistics, totalspin, value
-using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, shape, statistics, totalspin, value
+using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
@@ -1130,3 +1130,55 @@ function TargetSpace(hilbert::Hilbert{<:Spin}, quantumnumbers::OneOrMore{A}, tab
     sectors = [AbelianBases{A, N}(quantumnumber, locals, partition, gradeds, permutations, records[i], dimension(total, quantumnumber)) for (i, quantumnumber) in enumerate(quantumnumbers)]
     return TargetSpace(sectors, table)
 end
+
+"""
+    StaticSpinStructureFactor{R<:ReciprocalSpace} <: Action
+
+Static spin structure factor.
+"""
+struct StaticSpinStructureFactor{R<:ReciprocalSpace} <: Action
+    reciprocalspace::R
+end
+@inline options(::Type{<:Assignment{<:StaticSpinStructureFactor}}) = basicoptions
+
+"""
+    StaticSpinStructureFactorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
+
+Data of static spin structure factor, including:
+
+1) `reciprocalspace::R`: reciprocal space to compute the static spin structure factor.
+2) `values::V`: values of static spin structure factor.
+"""
+struct StaticSpinStructureFactorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
+    reciprocalspace::R
+    values::V
+end
+function run!(ed::Algorithm{<:ED}, factor::Assignment{<:StaticSpinStructureFactor}; options...)
+    eigensystem = only(factor.dependencies)
+    @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
+    lattice = ed.frontend.lattice
+    hilbert = ed.frontend.system.hilbert
+    table = ed.frontend.matrixization.table
+    Ω = only(eigensystem.data.vectors)
+    sector = only(eigensystem.data.sectors)
+    len = length(factor.action.reciprocalspace)
+    result = initialization(factor.action.reciprocalspace)
+    for i = 1:length(lattice), j = 1:length(lattice)
+        x = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1])), (sector, sector), table, ComplexF64), Ω)
+        y = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2])), (sector, sector), table, ComplexF64), Ω)
+        z = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3])), (sector, sector), table, ComplexF64), Ω)
+        displacement = lattice[i] - lattice[j]
+        for (k, momentum) in enumerate(factor.action.reciprocalspace)
+            phase = exp(1im*dot(momentum, displacement))
+            result[k] += real(x*phase)
+            result[k+len] += real(y*phase)
+            result[k+2len] += real(z*phase)
+        end
+    end
+    for k in eachindex(result)
+        result[k] /= len
+    end
+    return  StaticSpinStructureFactorData(factor.action.reciprocalspace, result)
+end
+@inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))..., 3)
+@inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 3)

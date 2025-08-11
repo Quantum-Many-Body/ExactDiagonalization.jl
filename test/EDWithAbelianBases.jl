@@ -1,6 +1,7 @@
 using ExactDiagonalization
-using QuantumLattices: Abelian, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊠, dimension, id, matrix, partition
+using Plots: plot, savefig
+using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: ⊠, dimension, id, matrix, partition, reciprocals
 using SparseArrays: SparseMatrixCSC
 
 @testset "AbelianBases" begin
@@ -134,4 +135,14 @@ end
     ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1); delay=true)
     eigensystem = eigen(matrix(prepare!(ed)); nev=6)
     @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
+end
+
+@testset "StaticSpinStructureFactor" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
+    lattice = Lattice(unitcell, (4, 4), ('P', 'P'))
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+    ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    structure = ed(Symbol("SpinStructureFactor"), StaticSpinStructureFactor(BrillouinZone(reciprocals(unitcell), 100)), (eigensystem,); nev=1)
+    savefig(plot(structure; nrow=1, ncol=3, size=(1200, 500), subtitles=["x", "y", "z"], title="", plot_title=string(structure), plot_titlefontsize=10), "Square-4x4-SpinStructureFactor.png")
 end
