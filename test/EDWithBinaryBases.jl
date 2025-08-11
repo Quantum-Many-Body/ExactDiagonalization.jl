@@ -209,6 +209,7 @@ end
 
     vector = [0.5, -0.5, -0.5, 0.5]
     eigensystem = eigen(prepare!(ed); nev=1)
+    @test length(eigensystem) == 1
     values, vectors, sectors = eigensystem
     @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
@@ -233,4 +234,8 @@ end
     eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
+
+    eigensystem = ed(:eigen, EDEigen(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)); nev=1)
+    @test isapprox(eigensystem.data.values[1], -3.23606797749979; atol=10^-10)
+    @test isapprox(eigensystem.data.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.data.vectors[1], -vector; atol=10^-10)
 end

@@ -1,15 +1,15 @@
 using Base.Iterators: product
 using KrylovKit: eigsolve
-using LinearAlgebra: I, Factorization, norm
+using LinearAlgebra: I
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, statistics, totalspin, value
-using QuantumLattices: Abelian, AbstractLattice, Algorithm, Boundary, CategorizedGenerator, Combinations, CompositeIndex, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
 import LinearAlgebra: eigen
-import QuantumLattices: Data, Graded, Parameters, ⊠, ⊗, ⊕, add!, dimension, getcontent, id, kind, matrix, options, parameternames, partition, run!, scalartype, update!
+import QuantumLattices: Graded, Parameters, ⊠, ⊗, ⊕, add!, dimension, getcontent, id, kind, matrix, options, parameternames, partition, run!, scalartype, update!
 
 # Basics for exact diagonalization method
 """
@@ -159,11 +159,23 @@ struct EDEigenData{V<:Number, T<:Number, S<:Sector} <: Data
     values::Vector{V}
     vectors::Vector{Vector{T}}
     sectors::Vector{S}
+    function EDEigenData(values::AbstractVector{<:Number}, vectors::AbstractVector{<:AbstractVector{<:Number}}, sectors::AbstractVector{<:Sector})
+        @assert length(values)==length(vectors)==length(sectors) "EDEigenData error: mismatched length of values, vectors and sectors."
+        new{eltype(values), eltype(eltype(vectors)), eltype(sectors)}(values, vectors, sectors)
+    end
+    EDEigenData{V, T, S}() where {V<:Number, T<:Number, S<:Sector} = new{T, T, S}()
 end
-@inline Base.iterate(content::EDEigenData) = (content.values, Val(:vectors))
-@inline Base.iterate(content::EDEigenData, ::Val{:vectors}) = (content.vectors, Val(:sectors))
-@inline Base.iterate(content::EDEigenData, ::Val{:sectors}) = (content.sectors, Val(:done))
-@inline Base.iterate(content::EDEigenData, ::Val{:done}) = nothing
+@inline Base.iterate(data::EDEigenData) = (data.values, Val(:vectors))
+@inline Base.iterate(data::EDEigenData, ::Val{:vectors}) = (data.vectors, Val(:sectors))
+@inline Base.iterate(data::EDEigenData, ::Val{:sectors}) = (data.sectors, Val(:done))
+@inline Base.iterate(data::EDEigenData, ::Val{:done}) = nothing
+
+"""
+    length(data::EDEigenData) -> Int
+
+Count the number of eigen value-vector-sector groups contained in an `EDEigenData`.
+"""
+@inline Base.length(data::EDEigenData) = length(data.values)
 
 """
     eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigenData
@@ -312,7 +324,7 @@ Prepare the matrix representation.
     @timeit timer "prepare" (isempty(ed.H) && reset!(ed.H, ed.matrixization, ed.system))
     return ed
 end
-@inline prepare!(ed::Algorithm{<:ED}) = prepare!(ed.frontend; timer=ed.timer)
+@inline prepare!(ed::Algorithm{<:ED}) = (prepare!(ed.frontend; timer=ed.timer); ed)
 
 """
     release!(ed::ED; gc::Bool=true) -> ED
@@ -416,6 +428,48 @@ Construct the exact diagonalization method for a quantum lattice system.
     targetspace = TargetSpace(hilbert, OneOrMore(quantumnumbers), Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     return ED(lattice, hilbert, terms, targetspace, boundary, dtype; neighbors=neighbors, timer=timer, delay=delay)
 end
+
+"""
+    const basicoptions = (
+        nev = "number of eigenvalues to be computed",
+        which = "type of eigenvalues to be computed",
+        tol = "tolerance of the computation",
+        maxiter = "maximum iteration of the computation",
+        v₀ = "initial state",
+        krylovdim = "maximum dimension of the Krylov subspace that will be constructed",
+        verbosity = "verbosity level"
+    )
+
+Basic options of actions for exact diagonalization method.
+"""
+const basicoptions = (
+    nev = "number of eigenvalues to be computed",
+    which = "type of eigenvalues to be computed",
+    tol = "tolerance of the computation",
+    maxiter = "maximum iteration of the computation",
+    v₀ = "initial state",
+    krylovdim = "maximum dimension of the Krylov subspace that will be constructed",
+    verbosity = "verbosity level"
+)
+
+"""
+    EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}} <: Action
+
+Eigen system by exact diagonalization method.
+"""
+struct EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}} <: Action
+    sectors::S
+end
+@inline options(::Type{<:Assignment{<:EDEigen}}) = basicoptions
+
+"""
+    EDEigen(sectors::Union{Abelian, Sector}...)
+    EDEigen(sectors:::Tuple{Vararg{Union{Abelian, Sector}}})
+
+Construct an `EDEigen`.
+"""
+@inline EDEigen(sectors::Union{Abelian, Sector}...) = EDEigen(sectors)
+@inline run!(ed::Algorithm{<:ED}, edeigen::Assignment{<:EDEigen}; options...) = eigen(ed, edeigen.action.sectors...; options...)
 
 # Binary bases, used for canonical fermionic and hard-core bosonic systems by default
 ## Basics for binary bases
