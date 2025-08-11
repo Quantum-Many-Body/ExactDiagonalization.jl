@@ -163,7 +163,6 @@ struct EDEigenData{V<:Number, T<:Number, S<:Sector} <: Data
         @assert length(values)==length(vectors)==length(sectors) "EDEigenData error: mismatched length of values, vectors and sectors."
         new{eltype(values), eltype(eltype(vectors)), eltype(sectors)}(values, vectors, sectors)
     end
-    EDEigenData{V, T, S}() where {V<:Number, T<:Number, S<:Sector} = new{T, T, S}()
 end
 @inline Base.iterate(data::EDEigenData) = (data.values, Val(:vectors))
 @inline Base.iterate(data::EDEigenData, ::Val{:vectors}) = (data.vectors, Val(:sectors))
