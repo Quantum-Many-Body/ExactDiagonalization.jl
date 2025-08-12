@@ -208,7 +208,7 @@ end
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
     vector = [0.5, -0.5, -0.5, 0.5]
-    eigensystem = eigen(ed; nev=1)
+    eigensystem = eigen(matrix(prepare!(ed)); nev=1)
     @test length(eigensystem) == 1
     values, vectors, sectors = eigensystem
     @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors

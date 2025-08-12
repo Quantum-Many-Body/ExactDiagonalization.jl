@@ -306,7 +306,7 @@ end
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.system; kwargs...)
-        update!(ed.H, ed.matrixization, ed.system; kwargs...)
+        isdefined(ed, :H) && update!(ed.H, ed.matrixization, ed.system; kwargs...)
     end
     return ed
 end
@@ -368,7 +368,7 @@ function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=e
     return result
 end
 function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, kwargs...)
-    sectors = eltype(idtype(eltype(ed.H)))[]
+    sectors = eltype(eltype(ed.matrixization.brakets))[]
     for (bra, ket) in ed.matrixization.brakets
         @assert bra==ket "matrix error: unequal bra and ket Hilbert spaces found."
         Abelian(bra)∈(quantumnumber, quantumnumbers...) && push!(sectors, bra)

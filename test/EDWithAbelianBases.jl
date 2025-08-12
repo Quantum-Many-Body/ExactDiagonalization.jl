@@ -144,9 +144,9 @@ end
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
 
-    structure = ed(Symbol("SpinStructureFactor-BZ"), StaticSpinStructureFactor(BrillouinZone(reciprocals(unitcell), 100)), eigensystem)
+    structure = ed(Symbol("SpinStructureFactor-BZ"), StaticSpinStructureFactor(BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)
     savefig(plot(structure; nrow=1, ncol=3, size=(1200, 500), subtitles=["x", "y", "z"], title="", plot_title=string(structure), plot_titlefontsize=10), "Square-4x4-SpinStructureFactorBZ.png")
 
-    structure = ed(Symbol("SpinStructureFactor-Path"), StaticSpinStructureFactor(ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem)
+    structure = ed(Symbol("SpinStructureFactor-Path"), StaticSpinStructureFactor(ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
     savefig(plot(structure; nrow=1, ncol=3, size=(1200, 500), subtitles=["x", "y", "z"], title="", plot_title=string(structure), plot_titlefontsize=10), "Square-4x4-SpinStructureFactor-Path.png")
 end
