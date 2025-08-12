@@ -2,7 +2,7 @@
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "8864c7f26fed6baa17d58f4311299acc27397f13"
+project_hash = "f0933e9d083f7a2ad258b6e2d19f4c7a8c82b644"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -135,9 +135,9 @@ version = "1.4.0"
 
 [[deps.Latexify]]
 deps = ["Format", "InteractiveUtils", "LaTeXStrings", "MacroTools", "Markdown", "OrderedCollections", "Requires"]
-git-tree-sha1 = "4f34eaabe49ecb3fb0d58d6015e32fd31a733199"
+git-tree-sha1 = "52e1296ebbde0db845b356abbbe67fb82a0a116c"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
-version = "0.16.8"
+version = "0.16.9"
 
     [deps.Latexify.extensions]
     DataFramesExt = "DataFrames"
@@ -274,9 +274,9 @@ version = "1.11.0"
 
 [[deps.QuantumLattices]]
 deps = ["DataStructures", "DelimitedFiles", "Format", "HalfIntegers", "IndentWrappers", "InteractiveUtils", "JLD2", "LaTeXStrings", "Latexify", "LinearAlgebra", "NearestNeighbors", "Printf", "Random", "RecipesBase", "Serialization", "SparseArrays", "StaticArrays", "TimerOutputs"]
-git-tree-sha1 = "420908129d821af565902f189e73edf346da13f0"
+git-tree-sha1 = "204963e5e90ac651a7004a1b4443cc0d9e230248"
 uuid = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
-version = "0.13.0"
+version = "0.13.1"
 
 [[deps.Random]]
 deps = ["SHA"]

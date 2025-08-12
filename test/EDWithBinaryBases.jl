@@ -202,25 +202,25 @@ end
     U = Hubbard(:U, 0.0)
     μ = Onsite(:μ, 0.0)
 
-    ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); delay=true))
+    ed = Algorithm(Symbol("two-site"), ED(lattice, hilbert, (t, U, μ), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     @test kind(ed.frontend) == kind(typeof(ed.frontend)) == EDKind(:Binary)
-    @test scalartype(ed.frontend) == scalartype(typeof(ed.frontend)) == Float64
+    @test scalartype(ed) == scalartype(ed.frontend) == scalartype(typeof(ed.frontend)) == Float64
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
 
     vector = [0.5, -0.5, -0.5, 0.5]
-    eigensystem = eigen(prepare!(ed); nev=1)
+    eigensystem = eigen(ed; nev=1)
     @test length(eigensystem) == 1
     values, vectors, sectors = eigensystem
     @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
-    eigensystem = eigen(matrix(ed); nev=1)
+    eigensystem = eigen(ed; nev=1)
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
     vector = [-0.43516214649359913, 0.5573454101893041, 0.5573454101893037, -0.43516214649359913]
     update!(release!(ed); U=1.0, μ=-0.5)
-    eigensystem = eigen(prepare!(ed), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
+    eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -2.5615528128088303; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
@@ -230,7 +230,7 @@ end
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    another = ED(ed.frontend.system, TargetSpace(hilbert, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)); delay=false)
+    another = ED(ed.frontend.system, TargetSpace(hilbert, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
