@@ -310,23 +310,25 @@ end
 @inline release!(ed::Algorithm{<:ED}; gc::Bool=true) = release!(ed.frontend; gc=gc)
 
 """
-    matrix(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> OperatorSum{<:EDMatrix}
-    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) -> OperatorSum{<:EDMatrix}
+    matrix(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) -> OperatorSum{<:EDMatrix}
+    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) -> OperatorSum{<:EDMatrix}
 
 Get the sparse matrix representation of a quantum lattice system in the target space.
 """
-function matrix(ed::ED; timer::TimerOutput=edtimer, kwargs...)
+function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false, kwargs...)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(ed.H)
     end
+    release && release!(ed; gc=true)
     return result
 end
-function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, kwargs...)
+function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(SectorFilter(sector, sectors...)(ed.H))
     end
+    release && release!(ed; gc=true)
     return result
 end
 function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, kwargs...)
@@ -342,13 +344,13 @@ function matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs.
 end
 
 """
-    eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, kwargs...) -> EDEigenData
-    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) -> EDEigenData
+    eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) -> EDEigenData
+    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
 """
-@inline eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, kwargs...) = eigen(matrix(ed, sectors...; timer=timer); timer=timer, kwargs...)
-@inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, kwargs...)
+@inline eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) = eigen(matrix(ed, sectors...; timer=timer, release=release); timer=timer, kwargs...)
+@inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, release=release, kwargs...)
 
 """
     ED(system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
@@ -435,7 +437,8 @@ const basicoptions = (
     maxiter = "maximum iteration of the computation",
     v₀ = "initial state",
     krylovdim = "maximum dimension of the Krylov subspace that will be constructed",
-    verbosity = "verbosity level"
+    verbosity = "verbosity level",
+    release = "release or not the cache for the construction of the sparse matrix representation of the Hamiltonian"
 )
 
 """
