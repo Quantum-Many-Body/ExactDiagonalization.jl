@@ -138,11 +138,11 @@ end
 @inline Base.iterate(data::EDEigenData, ::Val{:done}) = nothing
 
 """
-    length(data::EDEigenData) -> Int
+    count(data::EDEigenData) -> Int
 
 Count the number of eigen value-vector-sector groups contained in an `EDEigenData`.
 """
-@inline Base.length(data::EDEigenData) = length(data.values)
+@inline Base.count(data::EDEigenData) = length(data.values)
 
 """
     eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigenData
@@ -258,14 +258,14 @@ end
 
 Exact diagonalization method of a quantum lattice system.
 """
-mutable struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: Frontend
-    const lattice::L
-    const system::S
-    const matrixization::M
+struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: Frontend
+    lattice::L
+    system::S
+    matrixization::M
     H::H
     function ED{K}(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, matrixization::EDMatrixization) where {K<:EDKind}
-        H = Core.Compiler.return_type(matrixization, Tuple{typeof(system)})
-        new{K, typeof(lattice), typeof(system), typeof(matrixization), H}(lattice, system, matrixization)
+        H = matrixization(empty(system))
+        new{K, typeof(lattice), typeof(system), typeof(matrixization), typeof(H)}(lattice, system, matrixization, H)
     end
 end
 @inline kind(ed::ED) = kind(typeof(ed))
@@ -275,7 +275,7 @@ end
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.system; kwargs...)
-        isdefined(ed, :H) && update!(ed.H, ed.matrixization, ed.system; kwargs...)
+        update!(ed.H, ed.matrixization, ed.system; kwargs...)
     end
     return ed
 end
@@ -288,16 +288,9 @@ end
 Prepare the matrix representation.
 """
 @inline function prepare!(ed::ED; timer::TimerOutput=edtimer)
-    if isdefined(ed, :H)
-        isempty(ed.H) && @timeit timer "prepare!" begin
-            reset!(ed.H, ed.matrixization, ed.system)
-            @info "ED reset complete."
-        end
-    else
-        @timeit timer "prepare!" begin
-            ed.H = ed.matrixization(ed.system)
-            @info "ED preparation complete."
-        end
+    isempty(ed.H) && @timeit timer "prepare!" begin
+        reset!(ed.H, ed.matrixization, ed.system)
+        @info "ED prepare complete."
     end
     return ed
 end

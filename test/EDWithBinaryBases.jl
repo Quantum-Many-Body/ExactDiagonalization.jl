@@ -194,7 +194,7 @@ end
 
     vector = [0.5, -0.5, -0.5, 0.5]
     eigensystem = eigen(matrix(prepare!(ed)); nev=1)
-    @test length(eigensystem) == 1
+    @test count(eigensystem) == 1
     values, vectors, sectors = eigensystem
     @test values==eigensystem.values && vectors==eigensystem.vectors && sectors==eigensystem.sectors
     @test isapprox(eigensystem.values[1], -2.0; atol=10^-10)
