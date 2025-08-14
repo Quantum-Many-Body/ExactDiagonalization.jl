@@ -274,9 +274,9 @@ version = "1.11.0"
 
 [[deps.QuantumLattices]]
 deps = ["DataStructures", "DelimitedFiles", "Format", "HalfIntegers", "IndentWrappers", "InteractiveUtils", "JLD2", "LaTeXStrings", "Latexify", "LinearAlgebra", "NearestNeighbors", "Printf", "Random", "RecipesBase", "Serialization", "SparseArrays", "StaticArrays", "TimerOutputs"]
-git-tree-sha1 = "204963e5e90ac651a7004a1b4443cc0d9e230248"
+git-tree-sha1 = "d229f3c26f8fd4f3c7c216dd4e3d8f53044ac653"
 uuid = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
-version = "0.13.1"
+version = "0.13.2"
 
 [[deps.Random]]
 deps = ["SHA"]

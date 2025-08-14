@@ -1122,53 +1122,57 @@ function Base.broadcast(
 end
 
 """
-    StaticSpinStructureFactor{R<:ReciprocalSpace} <: Action
+    StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
 
-Static spin structure factor.
+Static two-point correlation function.
 """
-struct StaticSpinStructureFactor{R<:ReciprocalSpace} <: Action
+struct StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
+    operators::O
     reciprocalspace::R
 end
-@inline options(::Type{<:Assignment{<:StaticSpinStructureFactor}}) = basicoptions
+@inline options(::Type{<:Assignment{<:StaticTwoPointCorrelator}}) = basicoptions
 
 """
-    StaticSpinStructureFactorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
+    StaticTwoPointCorrelatorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
 
-Data of static spin structure factor, including:
+Data of static two-point correlation function, including:
 
-1) `reciprocalspace::R`: reciprocal space to compute the static spin structure factor.
-2) `values::V`: values of static spin structure factor.
+1) `reciprocalspace::R`: reciprocal space to compute the static two-point correlation function.
+2) `values::V`: values of the static two-point correlation function.
 """
-struct StaticSpinStructureFactorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
+struct StaticTwoPointCorrelatorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
     reciprocalspace::R
     values::V
 end
-function run!(ed::Algorithm{<:ED}, factor::Assignment{<:StaticSpinStructureFactor}; options...)
-    eigensystem = only(factor.dependencies)
+function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrelator}; options...)
+    eigensystem = only(correlator.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
-    lattice = ed.frontend.lattice
-    hilbert = ed.frontend.system.hilbert
     table = ed.frontend.matrixization.table
     Ω = only(eigensystem.data.vectors)
     sector = only(eigensystem.data.sectors)
-    len = length(factor.action.reciprocalspace)
-    result = initialization(factor.action.reciprocalspace)
-    for i = 1:length(lattice), j = 1:length(lattice)
-        x = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][1]), Index(j, hilbert[j][1])), (sector, sector), table, ComplexF64), Ω)
-        y = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][2]), Index(j, hilbert[j][2])), (sector, sector), table, ComplexF64), Ω)
-        z = dot(Ω, matrix(Operator(1, Index(i, hilbert[i][3]), Index(j, hilbert[j][3])), (sector, sector), table, ComplexF64), Ω)
-        displacement = lattice[i] - lattice[j]
-        for (k, momentum) in enumerate(factor.action.reciprocalspace)
-            phase = exp(1im*dot(momentum, displacement))
-            result[k] += real(x*phase)
-            result[k+len] += real(y*phase)
-            result[k+2len] += real(z*phase)
+    len = length(correlator.action.reciprocalspace)
+    result = initialization(correlator.action.reciprocalspace)
+    for operator in correlator.action.operators
+        factor = dot(Ω, matrix(operator, (sector, sector), table), Ω)
+        r = displacement(operator)
+        for (k, momentum) in enumerate(correlator.action.reciprocalspace)
+            # Note we always use e^ikr to perform the Fourier transformation, which may cause problems if the static correlator is complex.
+            # However, we only consider real static correlators for now.
+            phase = exp(1im*dot(momentum, r))
+            result[k] += real(factor*phase)/len
         end
     end
-    for k in eachindex(result)
-        result[k] /= len
-    end
-    return  StaticSpinStructureFactorData(factor.action.reciprocalspace, result)
+    return StaticTwoPointCorrelatorData(correlator.action.reciprocalspace, result)
 end
-@inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))..., 3)
-@inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 3)
+@inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))...)
+@inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 1)
+function displacement(operator::Operator)
+    @assert length(operator)>0 "displacement error: zero-length operator."
+    coordinates = [operator[1].rcoordinate]
+    for i = 2:length(operator)
+        coordinate = operator[i].rcoordinate
+        coordinate∈coordinates || push!(coordinates, coordinate)
+    end
+    @assert length(coordinates)<=2 "displacement error: more than two points ($(join(coordinates, ", "))) found."
+    return length(coordinates)==1 ? zero(only(coordinates)) : coordinates[1]-coordinates[2]
+end

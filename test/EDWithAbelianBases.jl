@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using Plots: plot, savefig
-using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁, @rectangle_str
-using QuantumLattices: ⊠, dimension, id, matrix, partition, reciprocals
+using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁, bonds, @rectangle_str
+using QuantumLattices: ⊠, dimension, expand, id, matrix, partition, reciprocals
 using SparseArrays: SparseMatrixCSC
 
 @testset "AbelianBases" begin
@@ -137,10 +137,9 @@ end
     hilbert = Hilbert(Spin{1//2}(), length(lattice))
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-
-    structure = ed(Symbol("SpinStructureFactor-BZ"), StaticSpinStructureFactor(BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)
-    savefig(plot(structure; nrow=1, ncol=3, size=(1200, 500), subtitles=["x", "y", "z"], title="", plot_title=string(structure), plot_titlefontsize=10), "Square-4x4-SpinStructureFactorBZ.png")
-
-    structure = ed(Symbol("SpinStructureFactor-Path"), StaticSpinStructureFactor(ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
-    savefig(plot(structure; nrow=1, ncol=3, size=(1200, 500), subtitles=["x", "y", "z"], title="", plot_title=string(structure), plot_titlefontsize=10), "Square-4x4-SpinStructureFactor-Path.png")
+    operators = expand(Heisenberg(:J, 1.0, :), bonds(lattice, :), hilbert)
+    structure = ed(Symbol("SpinStructureFactor-BZ"), StaticTwoPointCorrelator(operators, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)
+    savefig(plot(structure), "Square-4x4-SpinStructureFactorBZ.png")
+    structure = ed(Symbol("SpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
+    savefig(plot(structure), "Square-4x4-SpinStructureFactor-Path.png")
 end
