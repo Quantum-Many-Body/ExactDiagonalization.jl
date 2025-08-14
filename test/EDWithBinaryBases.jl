@@ -138,23 +138,23 @@ end
     table = Table(indexes, OperatorIndexToTuple(:site, :orbital, :spin))
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃
-    target = TargetSpace([BinaryBases(1:4, ℕ(1)), BinaryBases(1:4, ℕ(2)), BinaryBases(1:4, ℕ(3))], table)
+    sectors = (BinaryBases(1:4, ℕ(1)), BinaryBases(1:4, ℕ(2)), BinaryBases(1:4, ℕ(3)))
     M = EDMatrix{SparseMatrixCSC{Float64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
 
-    mr = EDMatrixization{Float64}(target)
+    mr = EDMatrixization{Float64}(table, sectors...)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
 
     ms = mr(ops)
-    mr₁ = EDMatrixization{Float64}(target[1:1])
-    mr₂ = EDMatrixization{Float64}(target[2:2])
-    mr₃ = EDMatrixization{Float64}(target[3:3])
+    mr₁ = EDMatrixization{Float64}(table, sectors[1])
+    mr₂ = EDMatrixization{Float64}(table, sectors[2])
+    mr₃ = EDMatrixization{Float64}(table, sectors[3])
     @test ms == mr₁(ops) + mr₂(ops) + mr₃(ops)
     @test mr₁(ops) == mr₁(op₁) + mr₁(op₂) + mr₁(op₃)
     @test mr₂(ops) == mr₂(op₁) + mr₂(op₂) + mr₂(op₃)
     @test mr₃(ops) == mr₃(op₁) + mr₃(op₂) + mr₃(op₃)
 
-    sf = SectorFilter(target[1])
-    @test sf == SectorFilter((target[1], target[1]))
+    sf = SectorFilter(sectors[1])
+    @test sf == SectorFilter((sectors[1], sectors[1]))
     @test valtype(typeof(sf), typeof(ms)) == typeof(ms)
     @test sf(ms) == mr₁(ops)
 end
@@ -174,25 +174,10 @@ end
 @testset "Sector" begin
     hilbert = Hilbert(Fock{:f}(1, 2), 2)
     @test Sector(hilbert) == BinaryBases(4)
-    @test Sector(hilbert, ℕ(2)) == BinaryBases(4, ℕ(2))
-    @test Sector(hilbert, 𝕊ᶻ(1//2)) == BinaryBases(1:2, 3:4, 𝕊ᶻ(1//2))
-    @test Sector(hilbert, ℕ(2) ⊠ 𝕊ᶻ(0)) == BinaryBases(1:2, 3:4, ℕ(2) ⊠ 𝕊ᶻ(0))
-end
-
-@testset "TargetSpace" begin
-    hilbert = Hilbert(Fock{:f}(1, 2), 2)
-    table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
-
-    bs₁ = BinaryBases(1:4, ℕ(2))
-    bs₂ = BinaryBases(1:4, ℕ(3))
-    ts = TargetSpace([bs₁, bs₂], table)
-    @test getcontent(ts, :contents) == ts.sectors
-    @test ts[2:2] == TargetSpace([bs₂], table)
-    @test ts == add!(TargetSpace([bs₁], table), bs₂)
-    @test ts == TargetSpace([bs₁], table)⊕bs₂ == bs₁⊕TargetSpace([bs₂], table)
-
-    @test TargetSpace(hilbert) == TargetSpace([BinaryBases(4)], table)
-    @test TargetSpace(hilbert, ℕ(2)) == TargetSpace(hilbert, ℕ(2), table) == TargetSpace([BinaryBases(4, ℕ(2))], table)
+    @test Sector(ℕ(2), hilbert) == BinaryBases(4, ℕ(2))
+    @test Sector(𝕊ᶻ(1//2), hilbert) == BinaryBases(1:2, 3:4, 𝕊ᶻ(1//2))
+    @test Sector(ℕ(2) ⊠ 𝕊ᶻ(0), hilbert) == BinaryBases(1:2, 3:4, ℕ(2) ⊠ 𝕊ᶻ(0))
+    @test broadcast(Sector, (ℕ(2) ⊠ 𝕊ᶻ(0),), hilbert) == (BinaryBases(1:2, 3:4, ℕ(2) ⊠ 𝕊ᶻ(0)),)
 end
 
 @testset "Binary ED" begin
@@ -230,7 +215,7 @@ end
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    another = ED(ed.frontend.system, TargetSpace(hilbert, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    another = ED(ed.frontend.system, ed.frontend.matrixization.table, Sector(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0), hilbert; table=ed.frontend.matrixization.table))
     eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)

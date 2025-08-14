@@ -4,7 +4,7 @@ using LinearAlgebra: I, dot
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
 using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, shape, statistics, totalspin, value
-using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
@@ -64,6 +64,17 @@ Judge whether two sectors could be direct producted.
 @inline productable(::Sector, ::Sector) = false
 
 """
+    map(::Type{Sector}, quantumnumbers::OneAtLeast{Abelian}, hilbert::Hilbert, args...; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> NTuple{fieldcount(typeof(quantumnumbers)), Sector}
+
+Construct a set of sectors based on the quantum numbers and a Hilbert space.
+"""
+@inline function Base.broadcast(::Type{Sector}, quantumnumbers::OneAtLeast{Abelian}, hilbert::Hilbert, args...; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+    return map(quantumnumbers) do quantumnumber
+        Sector(quantumnumber, hilbert, args...; table=table)
+    end
+end
+
+"""
     matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops)) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of a set of operators.
@@ -75,51 +86,6 @@ function matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, 
     length(ops)==1 && return matrix(ops[1], braket, table, dtype)
     return matrix(ops[1:length(ops)÷2], braket, table, dtype) + matrix(ops[length(ops)÷2+1:length(ops)], braket, table, dtype)
 end
-
-"""
-    TargetSpace{S<:Sector, T<:AbstractDict} <: VectorSpace{S}
-
-Target Hilbert space in which the exact diagonalization method is performed, which could be the direct sum of several sectors.
-"""
-struct TargetSpace{S<:Sector, T<:AbstractDict} <: VectorSpace{S}
-    sectors::Vector{S}
-    table::T
-end
-@inline VectorSpaceStyle(::Type{<:TargetSpace}) = VectorSpaceEnumerative()
-@inline getcontent(target::TargetSpace, ::Val{:contents}) = target.sectors
-@inline Base.getindex(target::TargetSpace, indexes::AbstractVector{<:Integer}) = TargetSpace(target.sectors[indexes], target.table)
-function add!(target::TargetSpace, sector::Sector)
-    @assert all(map(previous->sumable(previous, sector), target.sectors)) "add! error: could not be direct summed."
-    push!(target.sectors, sector)
-    return target
-end
-
-"""
-    ⊕(target::TargetSpace, sectors::Sector...) -> TargetSpace
-
-Get the direct sum of a target space with several sectors.
-"""
-@inline function ⊕(target::TargetSpace, sectors::Sector...)
-    result = TargetSpace(copy(target.sectors), target.table)
-    map(op->add!(result, op), sectors)
-    return result
-end
-@inline function ⊕(sector::Sector, target::TargetSpace)
-    result = TargetSpace([sector], target.table)
-    map(op->add!(result, op), target.sectors)
-    return result
-end
-
-"""
-    TargetSpace(hilbert::Hilbert, args...)
-    TargetSpace(hilbert::Hilbert, table::AbstractDict, args...)
-    TargetSpace(hilbert::Hilbert, quantumnumbers::OneOrMore{Abelian}, args...)
-
-Construct a target space from the total Hilbert space and the associated quantum numbers.
-"""
-@inline TargetSpace(hilbert::Hilbert, args...) = TargetSpace([Sector(hilbert, args...)], Table(hilbert, Metric(EDKind(hilbert), hilbert)))
-@inline TargetSpace(hilbert::Hilbert, table::AbstractDict, args...) = TargetSpace([Sector(hilbert, args...; table=table)], table)
-@inline TargetSpace(hilbert::Hilbert, quantumnumbers::OneOrMore{Abelian}, args...) = TargetSpace(hilbert, quantumnumbers, Table(hilbert, Metric(EDKind(hilbert), hilbert)), args...)
 
 """
     EDMatrix{M<:SparseMatrixCSC, S<:Sector} <: OperatorPack{M, Tuple{S, S}}
@@ -139,10 +105,12 @@ end
 """
     EDMatrix(m::SparseMatrixCSC, sector::Sector)
     EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector})
+    EDMatrix(m::SparseMatrixCSC, bra::Sector, ket::Sector)
 
 Construct a matrix representation when
-1) the ket and bra Hilbert spaces share the same bases;
-2) the ket and bra Hilbert spaces may be different.
+1) the bra and ket Hilbert spaces share the same bases;
+2) the bra and ket Hilbert spaces may be different;
+3) the bra and ket Hilbert spaces may or may not be the same.
 """
 @inline EDMatrix(m::SparseMatrixCSC, sector::Sector) = EDMatrix(m, sector, sector)
 @inline EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector}) = EDMatrix(m, braket[1], braket[2])
@@ -239,16 +207,16 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 end
 
 """
-    EDMatrixization{D<:Number, S<:Sector, T<:AbstractDict} <: Matrixization
+    EDMatrixization{D<:Number, T<:AbstractDict, S<:Sector} <: Matrixization
 
 Matrixization of a quantum lattice system on a target Hilbert space.
 """
-struct EDMatrixization{D<:Number, S<:Sector, T<:AbstractDict} <: Matrixization
-    brakets::Vector{Tuple{S, S}}
+struct EDMatrixization{D<:Number, T<:AbstractDict, S<:Sector} <: Matrixization
     table::T
-    EDMatrixization{D}(brakets::Vector{Tuple{S, S}}, table::AbstractDict) where {D<:Number, S<:Sector} = new{D, S, typeof(table)}(brakets, table)
+    brakets::Vector{Tuple{S, S}}
+    EDMatrixization{D}(table::AbstractDict, brakets::Vector{Tuple{S, S}}) where {D<:Number, S<:Sector} = new{D, typeof(table), S}(table, brakets)
 end
-@inline function Base.valtype(::Type{<:EDMatrixization{D, S}}, ::Type{M}) where {D<:Number, S<:Sector, M<:Operator}
+@inline function Base.valtype(::Type{<:EDMatrixization{D, <:AbstractDict, S}}, ::Type{M}) where {D<:Number, S<:Sector, M<:Operator}
     @assert promote_type(D, valtype(M))==D "valtype error: convert $(valtype(M)) to $D is inexact."
     E = EDMatrix{SparseMatrixCSC{D, Int}, S}
     return OperatorSum{E, idtype(E)}
@@ -265,11 +233,12 @@ function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs.
 end
 
 """
-    EDMatrixization{D}(target::TargetSpace) where {D<:Number}
+    EDMatrixization{D}(table::AbstractDict, sector::S, sectors::S...) where {D<:Number, S<:Sector}
+    EDMatrixization{D}(table::AbstractDict, brakets::Vector{Tuple{S, S}}) where {D<:Number, S<:Sector}
 
 Construct a matrixization.
 """
-@inline EDMatrixization{D}(target::TargetSpace) where {D<:Number} = EDMatrixization{D}([(sector, sector) for sector in target], target.table)
+@inline EDMatrixization{D}(table::AbstractDict, sector::S, sectors::S...) where {D<:Number, S<:Sector} = EDMatrixization{D}(table, [(target, target) for target in (sector, sectors...)])
 
 """
     SectorFilter{S} <: LinearTransformation
@@ -281,7 +250,7 @@ struct SectorFilter{S} <: LinearTransformation
 end
 @inline Base.valtype(::Type{<:SectorFilter}, ::Type{M}) where {M<:OperatorSum{<:EDMatrix}} = M
 @inline (sectorfileter::SectorFilter)(m::EDMatrix) = id(m)∈sectorfileter.brakets ? m : EDMatrix(spzeros(scalartype(m), size(value(m))...), id(m))
-@inline SectorFilter(sector::Sector, sectors::Sector...) = SectorFilter(map(op->(op, op), (sector, sectors...))...)
+@inline SectorFilter(sector::Sector, sectors::Sector...) = SectorFilter(map(target->(target, target), (sector, sectors...))...)
 @inline SectorFilter(braket::NTuple{2, Sector}, brakets::NTuple{2, Sector}...) = SectorFilter(push!(Set{typeof(braket)}(), braket, brakets...))
 
 """
@@ -389,41 +358,52 @@ Solve the eigen problem by the restarted Lanczos method provided by the Arpack p
 @inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, kwargs...)
 
 """
-    ED(system::Generator{<:Operators}, targetspace::TargetSpace, dtype::Type{<:Number}=scalartype(system))
-    ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, targetspace::TargetSpace, dtype::Type{<:Number}=scalartype(system))
+    ED(system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
+    ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
-@inline function ED(system::Generator{<:Operators}, targetspace::TargetSpace, dtype::Type{<:Number}=scalartype(system))
-    return ED(nothing, system, targetspace, dtype)
-end
-@inline function ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, targetspace::TargetSpace, dtype::Type{<:Number}=scalartype(system))
+@inline ED(system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system)) = ED(nothing, system, table, sectors, dtype)
+@inline function ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
     kind = typeof(EDKind(eltype(eltype(system))))
-    matrixization = EDMatrixization{dtype}(targetspace)
+    matrixization = EDMatrixization{dtype}(table, sectors)
     return ED{kind}(lattice, system, matrixization)
 end
 
 """
     ED(
-        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, targetspace::TargetSpace=TargetSpace(hilbert), boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+        neighbors::Union{Int, Neighbors}=nneighbor(terms)
+    )
+    ED(
+        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}=Sector(hilbert; table=table), boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
         neighbors::Union{Int, Neighbors}=nneighbor(terms)
     )
 
 Construct the exact diagonalization method for a quantum lattice system.
 """
-function ED(
-    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, targetspace::TargetSpace=TargetSpace(hilbert), boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+@inline function ED(
+    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    terms = OneOrMore(terms)
-    system = Generator(bonds(lattice, neighbors), hilbert, terms, boundary, eager; half=false)
-    matrixization = EDMatrixization{dtype}(targetspace)
+    return ED(lattice, hilbert, terms, Table(hilbert, Metric(EDKind(hilbert), hilbert)), Sector(hilbert), boundary, dtype; neighbors=neighbors)
+end
+function ED(
+    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+    neighbors::Union{Int, Neighbors}=nneighbor(terms)
+)
+    system = Generator(bonds(lattice, neighbors), hilbert, OneOrMore(terms), boundary, eager; half=false)
+    matrixization = EDMatrixization{dtype}(table, OneOrMore(sectors)...)
     return ED{typeof(EDKind(hilbert))}(lattice, system, matrixization)
 end
 
 """
     ED(
         lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+        neighbors::Union{Int, Neighbors}=nneighbor(terms)
+    )
+    ED(
+        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
         neighbors::Union{Int, Neighbors}=nneighbor(terms)
     )
 
@@ -433,8 +413,13 @@ Construct the exact diagonalization method for a quantum lattice system.
     lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    targetspace = TargetSpace(hilbert, OneOrMore(quantumnumbers), Table(hilbert, Metric(EDKind(hilbert), hilbert)))
-    return ED(lattice, hilbert, terms, targetspace, boundary, dtype; neighbors=neighbors)
+    return ED(lattice, hilbert, terms, Table(hilbert, Metric(EDKind(hilbert), hilbert)), quantumnumbers, boundary, dtype; neighbors=neighbors)
+end
+@inline function ED(
+    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+    neighbors::Union{Int, Neighbors}=nneighbor(terms)
+)
+    return ED(lattice, hilbert, terms, table, broadcast(Sector, OneOrMore(quantumnumbers), hilbert; table=table), boundary, dtype; neighbors=neighbors)
 end
 
 """
@@ -830,34 +815,21 @@ Get the index-to-tuple metric for a canonical quantum Fock lattice system.
 
 """
     Sector(hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt) -> BinaryBases
-    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ℕ, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
-    Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Union{𝕊ᶻ, Abelian[ℕ ⊠ 𝕊ᶻ], Abelian[𝕊ᶻ ⊠ ℕ]}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
+    Sector(quantumnumber::ℕ, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
+    Sector(quantumnumber::Union{𝕊ᶻ, Abelian[ℕ ⊠ 𝕊ᶻ], Abelian[𝕊ᶻ ⊠ ℕ]}, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
 
 Construct the binary bases of a Hilbert space with the specified quantum number.
 """
 @inline Sector(hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt) = BinaryBases(basistype(sum([length(internal)÷2 for internal in values(hilbert)])))
-@inline function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::ℕ, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+@inline function Sector(quantumnumber::ℕ, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     states = Set{basistype}(table[Index(site, index)] for (site, internal) in hilbert for index in internal)
     return BinaryBases(states, quantumnumber)
 end
-@inline function Sector(hilbert::Hilbert{<:Fock}, quantumnumber::Union{𝕊ᶻ, Abelian[ℕ ⊠ 𝕊ᶻ], Abelian[𝕊ᶻ ⊠ ℕ]}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+@inline function Sector(quantumnumber::Union{𝕊ᶻ, Abelian[ℕ ⊠ 𝕊ᶻ], Abelian[𝕊ᶻ ⊠ ℕ]}, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     @assert all(internal->internal.nspin==2, values(hilbert)) "Sector error: only for spin-1/2 systems."
     spindws = Set{basistype}(table[Index(site, index)] for (site, internal) in hilbert for index in internal if index.spin==-1//2)
     spinups = Set{basistype}(table[Index(site, index)] for (site, internal) in hilbert for index in internal if index.spin==+1//2)
     return BinaryBases(spindws, spinups, quantumnumber)
-end
-
-"""
-    TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumbers::OneOrMore{Abelian}, table::AbstractDict, basistype::Type{<:Unsigned}=UInt)
-
-Construct a target space from the total Hilbert space and the associated quantum numbers.
-"""
-@inline function TargetSpace(hilbert::Hilbert{<:Fock}, quantumnumbers::OneOrMore{A}, table::AbstractDict, basistype::Type{<:Unsigned}=UInt) where {A<:Abelian}
-    sectors = BinaryBases{A, BinaryBasis{basistype}, Vector{BinaryBasis{basistype}}}[]
-    for quantumnumber in OneOrMore(quantumnumbers)
-        push!(sectors, Sector(hilbert, quantumnumber, basistype; table=table))
-    end
-    return TargetSpace(sectors, table)
 end
 
 # Abelian bases, used for canonical spin systems by default
@@ -1107,15 +1079,21 @@ Get the index-to-tuple metric for a canonical quantum spin lattice system.
 @inline @generated Metric(::EDKind{:Abelian}, ::Hilbert{<:Spin}) = OperatorIndexToTuple(:site)
 
 """
-    Sector(hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert)); table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> AbelianBases
-    Sector(hilbert::Hilbert{<:Spin}, quantumnumber::Abelian, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert)); table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> AbelianBases
+    Sector(hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert))) -> AbelianBases
+    Sector(
+        quantumnumber::Abelian, hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert));
+        table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    ) -> AbelianBases
 
 Construct the Abelian bases of a spin Hilbert space with the specified quantum number.
 """
-@inline function Sector(hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert)); table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
-    return Sector(hilbert, ℤ₁(0), partition; table=table)
+@inline function Sector(hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert)))
+    return Sector(ℤ₁(0), hilbert, partition; table=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
 end
-@inline function Sector(hilbert::Hilbert{<:Spin}, quantumnumber::Abelian, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert)); table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+@inline function Sector(
+    quantumnumber::Abelian, hilbert::Hilbert{<:Spin}, partition::Tuple{Vararg{AbstractVector{Int}}}=partition(length(hilbert));
+    table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+)
     @assert sort(vcat(partition...))==1:length(hilbert) "Sector error: incorrect partition."
     return AbelianBases(sorted_locals(typeof(quantumnumber), hilbert, table), quantumnumber, partition)
 end
@@ -1127,17 +1105,24 @@ end
 end
 
 """
-    TargetSpace(hilbert::Hilbert{<:Spin}, quantumnumbers::OneOrMore{Abelian}, table::AbstractDict, partition::NTuple{N, AbstractVector{Int}}=partition(length(hilbert))) where N
+    broadcast(
+        ::Type{Sector}, quantumnumbers::OneAtLeast{Abelian}, hilbert::Hilbert{<:Spin}, partition::NTuple{N, AbstractVector{Int}}=partition(length(hilbert));
+        table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    ) where N -> NTuple{fieldcount(typeof(quantumnumbers)), AbelianBases}
 
-Construct a target space from the total Hilbert space and the associated quantum numbers.
+Construct a set of Abelian based based on the quantum numbers and a Hilbert space.
 """
-function TargetSpace(hilbert::Hilbert{<:Spin}, quantumnumbers::OneOrMore{A}, table::AbstractDict, partition::NTuple{N, AbstractVector{Int}}=partition(length(hilbert))) where {N, A<:Abelian}
-    @assert sort(vcat(partition...))==1:length(hilbert) "TargetSpace error: incorrect partition."
+function Base.broadcast(
+    ::Type{Sector}, quantumnumbers::OneAtLeast{A}, hilbert::Hilbert{<:Spin}, partition::NTuple{N, AbstractVector{Int}}=partition(length(hilbert));
+    table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))
+) where {N, A<:Abelian}
+    @assert sort(vcat(partition...))==1:length(hilbert) "Broadcast of Sector error: incorrect partition."
     quantumnumbers = OneOrMore(quantumnumbers)
     locals = sorted_locals(A, hilbert, table)
     gradeds, permutations, total, records = intermediate(locals, partition, quantumnumbers...)
-    sectors = [AbelianBases{A, N}(quantumnumber, locals, partition, gradeds, permutations, records[i], dimension(total, quantumnumber)) for (i, quantumnumber) in enumerate(quantumnumbers)]
-    return TargetSpace(sectors, table)
+    return map(quantumnumbers, records) do quantumnumber, record
+        AbelianBases{A, N}(quantumnumber, locals, partition, gradeds, permutations, record, dimension(total, quantumnumber))
+    end
 end
 
 """

@@ -113,14 +113,8 @@ end
 @testset "Sector" begin
     hilbert = Hilbert(Spin{1//2}(), 2)
     @test Sector(hilbert) == AbelianBases([2, 2])
-    @test Sector(hilbert, 𝕊ᶻ(0)) == AbelianBases([Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)', Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)'], 𝕊ᶻ(0))
-end
-
-@testset "TargetSpace" begin
-    hilbert = Hilbert(Spin{1//2}(), 2)
-    table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
-    @test TargetSpace(hilbert, table) == TargetSpace([AbelianBases([2, 2])], table)
-    @test TargetSpace(hilbert, 𝕊ᶻ(0), table) ==  TargetSpace([AbelianBases([Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)', Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)'], 𝕊ᶻ(0))], table)
+    @test Sector(𝕊ᶻ(0), hilbert) == AbelianBases([Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)', Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)'], 𝕊ᶻ(0))
+    @test broadcast(Sector, (𝕊ᶻ(0),), hilbert) == (AbelianBases([Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)', Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)'], 𝕊ᶻ(0)),)
 end
 
 @testset "Abelian ED" begin
