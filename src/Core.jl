@@ -64,7 +64,7 @@ Judge whether two sectors could be direct producted.
 @inline productable(::Sector, ::Sector) = false
 
 """
-    map(::Type{Sector}, quantumnumbers::OneAtLeast{Abelian}, hilbert::Hilbert, args...; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> NTuple{fieldcount(typeof(quantumnumbers)), Sector}
+    broadcast(::Type{Sector}, quantumnumbers::OneAtLeast{Abelian}, hilbert::Hilbert, args...; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> NTuple{fieldcount(typeof(quantumnumbers)), Sector}
 
 Construct a set of sectors based on the quantum numbers and a Hilbert space.
 """
