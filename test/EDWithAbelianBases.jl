@@ -1,6 +1,6 @@
 using ExactDiagonalization
 using Plots: plot, savefig
-using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁, bonds, @rectangle_str
+using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, ReciprocalZone, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁, bonds, @hexagon_str, @rectangle_str
 using QuantumLattices: ⊠, dimension, expand, id, matrix, partition, reciprocals
 using SparseArrays: SparseMatrixCSC
 
@@ -131,15 +131,27 @@ end
     @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
 end
 
-@testset "StaticSpinStructureFactor" begin
+@testset "SquareStaticSpinStructureFactor" begin
     unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
     lattice = Lattice(unitcell, (4, 4), ('P', 'P'))
     hilbert = Hilbert(Spin{1//2}(), length(lattice))
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
     operators = expand(Heisenberg(:J, 1.0, :), bonds(lattice, :), hilbert)
-    structure = ed(Symbol("SpinStructureFactor-BZ"), StaticTwoPointCorrelator(operators, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)
-    savefig(plot(structure), "Square-4x4-SpinStructureFactorBZ.png")
-    structure = ed(Symbol("SpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
-    savefig(plot(structure), "Square-4x4-SpinStructureFactor-Path.png")
+    savefig(plot(ed(Symbol("Heisenberg-Square-4x4-SpinStructureFactor-BZ"), StaticTwoPointCorrelator(operators, BrillouinZone(reciprocals(unitcell), 100)), eigensystem)), "Heisenberg-Square-4x4-SpinStructureFactor-BZ.png")
+    savefig(plot(ed(Symbol("Heisenberg-Square-4x4-SpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem)), "Heisenberg-Square-4x4-SpinStructureFactor-Path.png")
+end
+
+@testset "HexagonStaticSpinStructureFactor" begin
+    unitcell = Lattice([0.0, 0.0], [0.0, √3/3]; vectors=[[1.0, 0.0], [0.5, √3/2]])
+    lattice = Lattice(
+        [0.0, 0.0], [0.0, √3/3], [0.5, √3/2], [0.5, -√3/6], [1.0, 0.0], [1.0, √3/3];
+        vectors=[[1.5, √3/2], [1.5, -√3/2]]
+    )
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+    ed = Algorithm(Symbol("Hexagon-H6"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    operators = expand(Heisenberg(:J, 1.0, :), bonds(lattice, :), hilbert)
+    savefig(plot(ed(Symbol("Heisenberg-Hexagon-H6-SpinStructureFactor-RZ"), StaticTwoPointCorrelator(operators, ReciprocalZone([[pi, 0.0], [0.0, pi]], -4=>4, -4=>4)), eigensystem)), "Heisenberg-Hexagon-H6-SpinStructureFactor-RZ.png")
+    savefig(plot(ed(Symbol("Heisenberg-Hexagon-H6-SpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), (0, 0), (1, 0), (2, 1); labels=("Γ", "Γ′", "Γ′′"))), eigensystem)), "Heisenberg-Hexagon-H6-SpinStructureFactor-Path.png")
 end

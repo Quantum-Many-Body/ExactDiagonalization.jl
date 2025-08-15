@@ -1,6 +1,7 @@
 using ExactDiagonalization
-using QuantumLattices: Abelian, Algorithm, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Table, 𝕔, ℕ, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊕, ⊗, ⊠, add!, dimension, getcontent, id, idtype, kind, matrix, parameternames, scalartype, update!
+using Plots: plot, savefig
+using QuantumLattices: Abelian, Algorithm, BrillouinZone, Coulomb, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, ReciprocalPath, Table, ℕ, 𝕊ᶻ, ℤ₁
+using QuantumLattices: ⊕, ⊗, ⊠, add!, bonds, dimension, expand, getcontent, id, idtype, kind, matrix, parameternames, reciprocals, scalartype, update!, 𝕔, 𝕔⁺𝕔, @rectangle_str, @σ_str
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -223,4 +224,19 @@ end
     eigensystem = ed(:eigen, EDEigen(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)); nev=1)
     @test isapprox(eigensystem.data.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.data.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.data.vectors[1], -vector; atol=10^-10)
+end
+
+@testset "SquareStaticSpinStructureFactor" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
+    lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+    ed = Algorithm(Symbol("Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    operators = expand(
+        Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ"+", :)*𝕔⁺𝕔(:, :, σ"-", :) + 1//2*𝕔⁺𝕔(:, :, σ"-", :)*𝕔⁺𝕔(:, :, σ"+", :) + 𝕔⁺𝕔(:, :, σ"z", :)*𝕔⁺𝕔(:, :, σ"z", :)),
+        bonds(lattice, :),
+        hilbert
+    )
+    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(operators, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
+    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
 end
