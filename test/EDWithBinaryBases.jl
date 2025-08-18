@@ -110,6 +110,7 @@ end
     @test matrix(ops[1]+ops[2]+ops[3]+ops[4], braket, table) == m₁+m₂+m₃+m₄
 
     braket = (BinaryBases(1:4, ℕ(2)), BinaryBases(1:4, ℕ(2)))
+    @test matrix(Operator(2.5), braket, table) == SparseMatrixCSC(6, 6, [1, 2, 3, 4, 5, 6, 7], [1, 2, 3, 4, 5, 6], [2.5, 2.5, 2.5, 2.5, 2.5, 2.5])
     @test matrix(ops[2]'*ops[1], braket, table) == SparseMatrixCSC(6, 6, [1, 1, 2, 2, 3, 3, 3], [3, 5], [4.0, 4.0])
     @test matrix(ops[3]'*ops[1], braket, table) == SparseMatrixCSC(6, 6, [1, 2, 2, 2, 3, 3, 3], [3, 6], [-4.0, 4.0])
 end
@@ -226,17 +227,26 @@ end
     @test isapprox(eigensystem.data.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.data.vectors[1], -vector; atol=10^-10)
 end
 
+@testset "SquareStaticChargeStructFactor" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
+    lattice = Lattice(unitcell, (4, 4), ('P', 'P'))
+    hilbert = Hilbert(Fock{:f}(1, 1), length(lattice))
+    ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    nᵢ = [expand(Onsite(:n, 1.0), bond, hilbert) for bond in bonds(lattice, 0)]
+    expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem; nev=1)
+    nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
+    savefig(plot(ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png")
+    savefig(plot(ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-Path"), StaticTwoPointCorrelator(nᵢnⱼ, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)), "Spinless-Square-4x4-StaticChargeStructureFactor-Path.png")
+end
+
 @testset "SquareStaticSpinStructureFactor" begin
     unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
     lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
     ed = Algorithm(Symbol("Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    operators = expand(
-        Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ"+", :)*𝕔⁺𝕔(:, :, σ"-", :) + 1//2*𝕔⁺𝕔(:, :, σ"-", :)*𝕔⁺𝕔(:, :, σ"+", :) + 𝕔⁺𝕔(:, :, σ"z", :)*𝕔⁺𝕔(:, :, σ"z", :)),
-        bonds(lattice, :),
-        hilbert
-    )
-    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(operators, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
-    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(operators, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
+    SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ"+", :)*𝕔⁺𝕔(:, :, σ"-", :) + 1//2*𝕔⁺𝕔(:, :, σ"-", :)*𝕔⁺𝕔(:, :, σ"+", :) + 𝕔⁺𝕔(:, :, σ"z", :)*𝕔⁺𝕔(:, :, σ"z", :)), bond, hilbert) for bond in bonds(lattice, :)]
+    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
+    savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
 end

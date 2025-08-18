@@ -75,6 +75,13 @@ Construct a set of sectors based on the quantum numbers and a Hilbert space.
 end
 
 """
+    matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{V, Int}
+
+Get the CSC-formed sparse matrix representation of a scalar operator.
+"""
+@inline matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, ::AbstractDict, dtype=V) where V = sparse(one(dtype)*op.value*I, dimension(braket[1]), dimension(braket[2]))
+
+"""
     matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops)) -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of a set of operators.
@@ -222,11 +229,11 @@ end
     return OperatorSum{E, idtype(E)}
 end
 @inline Base.valtype(::Type{R}, ::Type{M}) where {R<:EDMatrixization, M<:Operators} = valtype(R, eltype(M))
-function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs...)
+function (matrixization::EDMatrixization)(m::Union{Operator, Operators})
     result = zero(valtype(matrixization, m))
     if isa(m, Operator) || length(m)>0
         for braket in matrixization.brakets
-            add!(result, EDMatrix(matrix(m, braket, matrixization.table, scalartype(result); kwargs...), braket))
+            add!(result, EDMatrix(matrix(m, braket, matrixization.table, scalartype(result)), braket))
         end
     end
     return result
@@ -756,13 +763,13 @@ function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
 end
 
 """
-    matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op); kwargs...) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=valtype(op); kwargs...)
+function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ndata, intermediate = 1, zeros(ket|>eltype, length(op)+1)
@@ -952,13 +959,13 @@ Get the matrix representation of an `OperatorIndex` on an Abelian graded space.
 @inline matrix(index::OperatorIndex, graded::Graded, dtype::Type{<:Number}=ComplexF64) = matrix(InternalIndex(index), graded, dtype)
 
 """
-    matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op); kwargs...) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of an operator.
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=valtype(op); kwargs...)
+function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
@@ -978,7 +985,7 @@ function matrix(op::Operator, braket::NTuple{2, AbelianBases{ℤ₁}}, table::Ab
     end
     return result
 end
-function matrix(op::Operator, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=valtype(op); kwargs...)
+function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
     @assert match(bra, ket) "matrix error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
@@ -1122,12 +1129,47 @@ function Base.broadcast(
 end
 
 """
+    GroundStateExpectation{D<:Number, O<:Array{<:Operators}} <: Action
+
+Ground state expectation of operators.
+"""
+struct GroundStateExpectation{D<:Number, O<:Array{<:Operators}} <: Action
+    operators::O
+    GroundStateExpectation{D}(operators::Array{<:Operators}) where {D<:Number} = new{D, typeof(operators)}(operators)
+end
+@inline options(::Type{<:Assignment{<:GroundStateExpectation}}) = basicoptions
+@inline GroundStateExpectation(operators::Array{<:Operators}) = GroundStateExpectation{Float64}(operators)
+
+"""
+    GroundStateExpectationData{A<:Array{<:Number}} <: Data
+
+Data of ground state expectation of operators, including:
+
+`values::A`: values of the ground state expectation.
+"""
+struct GroundStateExpectationData{A<:Array{<:Number}} <: Data
+    values::A
+end
+function run!(ed::Algorithm{<:ED}, expectation::Assignment{<:GroundStateExpectation{D}}; options...) where {D<:Number}
+    eigensystem = only(expectation.dependencies)
+    @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
+    table = ed.frontend.matrixization.table
+    Ω = only(eigensystem.data.vectors)
+    sector = only(eigensystem.data.sectors)
+    result = zeros(D, size(expectation.action.operators))
+    for (i, operator) in enumerate(expectation.action.operators)
+        result[i] = dot(Ω, matrix(operator, (sector, sector), table), Ω)
+    end
+    return GroundStateExpectationData(result)
+end
+
+"""
     StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
 
 Static two-point correlation function.
 """
 struct StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
-    operators::O
+    operators::Matrix{O}
     reciprocalspace::R
 end
 @inline options(::Type{<:Assignment{<:StaticTwoPointCorrelator}}) = basicoptions
@@ -1147,14 +1189,17 @@ end
 function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrelator}; options...)
     eigensystem = only(correlator.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
+    lattice = ed.frontend.lattice
+    operators = correlator.action.operators
+    @assert size(operators)==(length(lattice), length(lattice)) "run! error: the size ($(join(size(operators), "x"))) of the operators doest not match the length ($(length(lattice))) of the lattice."
     table = ed.frontend.matrixization.table
     Ω = only(eigensystem.data.vectors)
     sector = only(eigensystem.data.sectors)
     len = length(correlator.action.reciprocalspace)
     result = initialization(correlator.action.reciprocalspace)
-    for operator in correlator.action.operators
-        factor = dot(Ω, matrix(operator, (sector, sector), table), Ω)
-        r = displacement(operator)
+    for index in CartesianIndices(operators)
+        factor = dot(Ω, matrix(operators[index], (sector, sector), table), Ω)
+        r = lattice[index[2]] - lattice[index[1]]
         for (k, momentum) in enumerate(correlator.action.reciprocalspace)
             # Note we always use e^ikr to perform the Fourier transformation, which may cause problems if the static correlator is complex.
             # However, we only consider real static correlators for now.
@@ -1166,13 +1211,3 @@ function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrel
 end
 @inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))...)
 @inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 1)
-function displacement(operator::Operator)
-    @assert length(operator)>0 "displacement error: zero-length operator."
-    coordinates = [operator[1].rcoordinate]
-    for i = 2:length(operator)
-        coordinate = operator[i].rcoordinate
-        coordinate∈coordinates || push!(coordinates, coordinate)
-    end
-    @assert length(coordinates)<=2 "displacement error: more than two points ($(join(coordinates, ", "))) found."
-    return length(coordinates)==1 ? zero(only(coordinates)) : coordinates[1]-coordinates[2]
-end
