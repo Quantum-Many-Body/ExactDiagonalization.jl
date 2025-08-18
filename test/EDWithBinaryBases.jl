@@ -234,7 +234,7 @@ end
     hilbert = Hilbert(Fock{:f}(1, 1), length(lattice))
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    nᵢ = [expand(Onsite(:n, 1.0), bond, hilbert) for bond in bonds(lattice, 0)]
+    nᵢ = [𝕔(i, 1, 0, 2)*𝕔(i, 1, 0, 1) for i = 1:length(lattice)]
     expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem; nev=1)
     nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
     savefig(plot(ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png")

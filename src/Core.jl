@@ -1129,16 +1129,16 @@ function Base.broadcast(
 end
 
 """
-    GroundStateExpectation{D<:Number, O<:Array{<:Operators}} <: Action
+    GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}} <: Action
 
 Ground state expectation of operators.
 """
-struct GroundStateExpectation{D<:Number, O<:Array{<:Operators}} <: Action
+struct GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}} <: Action
     operators::O
-    GroundStateExpectation{D}(operators::Array{<:Operators}) where {D<:Number} = new{D, typeof(operators)}(operators)
+    GroundStateExpectation{D}(operators::Array{<:Union{Operator, Operators}}) where {D<:Number} = new{D, typeof(operators)}(operators)
 end
 @inline options(::Type{<:Assignment{<:GroundStateExpectation}}) = basicoptions
-@inline GroundStateExpectation(operators::Array{<:Operators}) = GroundStateExpectation{Float64}(operators)
+@inline GroundStateExpectation(operators::Array{<:Union{Operator, Operators}}) = GroundStateExpectation{Float64}(operators)
 
 """
     GroundStateExpectationData{A<:Array{<:Number}} <: Data
@@ -1164,11 +1164,11 @@ function run!(ed::Algorithm{<:ED}, expectation::Assignment{<:GroundStateExpectat
 end
 
 """
-    StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
+    StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace} <: Action
 
 Static two-point correlation function.
 """
-struct StaticTwoPointCorrelator{O<:Operators, R<:ReciprocalSpace} <: Action
+struct StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace} <: Action
     operators::Matrix{O}
     reciprocalspace::R
 end
