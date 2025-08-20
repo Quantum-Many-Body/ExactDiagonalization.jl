@@ -230,7 +230,7 @@ end
     return OperatorSum{E, idtype(E)}
 end
 @inline Base.valtype(::Type{R}, ::Type{M}) where {R<:EDMatrixization, M<:Operators} = valtype(R, eltype(M))
-function (matrixization::EDMatrixization)(m::Union{Operator, Operators})
+function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs...)
     result = zero(valtype(matrixization, m))
     if isa(m, Operator) || length(m)>0
         for braket in matrixization.brakets
