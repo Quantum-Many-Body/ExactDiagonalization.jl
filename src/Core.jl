@@ -3,8 +3,9 @@ using KrylovKit: eigsolve
 using LinearAlgebra: I, dot
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
-using QuantumLattices: eager, plain, azimuth, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, totalspin, value
+using QuantumLattices: eager, plain, azimuth, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, str, totalspin, value
 using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeDict, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
+using RecipesBase: RecipesBase, @recipe
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
@@ -1335,4 +1336,12 @@ function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStatePro
         end
     end
     return SpinCoherentStateProjectionData(projection.action.polars, projection.action.azimuths, result)
+end
+@recipe function plot(projection::Assignment{<:SpinCoherentStateProjection})
+    title --> str(projection)
+    titlefontsize --> 10
+    seriestype := :heatmap
+    xlabel --> "θ/π"
+    ylabel --> "φ/π"
+    projection.data.polars/pi, projection.data.azimuths/pi, projection.data.values
 end
