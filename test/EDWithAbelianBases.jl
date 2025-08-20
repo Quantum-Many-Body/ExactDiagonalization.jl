@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using Plots: plot, savefig
-using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, ReciprocalZone, Spin, Table, 𝕊, 𝕊ᶻ, ℤ₁, bonds, @hexagon_str, @rectangle_str
-using QuantumLattices: ⊠, dimension, expand, id, matrix, partition, reciprocals
+using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, ReciprocalZone, Spin, Table, Zeeman, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: ⊠, bonds, dimension, expand, id, matrix, partition, reciprocals, @hexagon_str, @rectangle_str
 using SparseArrays: SparseMatrixCSC
 
 @testset "AbelianBases" begin
@@ -157,5 +157,36 @@ end
 end
 
 @testset "SpinCoherentState" begin
-    
+    @test SpinCoherentState(Dict(1=>[0, 0, 1], 2=>[0, 0, -1])) == SpinCoherentState(Dict(1=>(0, 0), 2=>(pi, 0)); unit=:radian) == SpinCoherentState(Dict(1=>(0, 0), 2=>(180, 0)); unit=:degree)
+
+    hilbert = Hilbert(Spin{1//2}(), 4)
+    table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    sector = Sector(𝕊ᶻ(0), hilbert)
+    @test SpinCoherentState(Dict(i=>i∈(1, 2) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [1, 0, 0, 0, 0, 0]
+    @test SpinCoherentState(Dict(i=>i∈(2, 4) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [0, 1, 0, 0, 0, 0]
+    @test SpinCoherentState(Dict(i=>i∈(2, 3) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [0, 0, 1, 0, 0, 0]
+    @test SpinCoherentState(Dict(i=>i∈(1, 4) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [0, 0, 0, 1, 0, 0]
+    @test SpinCoherentState(Dict(i=>i∈(1, 3) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [0, 0, 0, 0, 1, 0]
+    @test SpinCoherentState(Dict(i=>i∈(3, 4) ? [0, 0, -1] : [0, 0, 1] for i=1:4))(sector, table) == [0, 0, 0, 0, 0, 1]
+end
+
+@testset "SpinCoherentStateProjection" begin
+    unitcell = Lattice([0.0, 0.0], [0.0, √3/3]; vectors=[[1.0, 0.0], [0.5, √3/2]])
+    lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+
+    coherent = SpinCoherentState(Dict(i=>[0.0, 0.0, 1.0] for i=1:length(lattice)))
+    ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, -1.0, 1), Zeeman(:h, Complex(-0.2), (pi/2, pi); unit=:radian))))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    savefig(plot(ed(Symbol("Hexagon-2x2-SpinCoherentState-FM-(90, 180)"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)), "Hexagon-2x2-SpinCoherentState-FM-(90, 180).png")
+
+    coherent = SpinCoherentState(Dict(i=>iseven(i) ? [0.0, 0.0, 1.0] : [0.0, 0.0, -1.0] for i=1:length(lattice)))
+    ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, 1.0, 1), Zeeman(:h, Complex(-0.2), 'z'; amplitude=bond->iseven(bond[1].site) ? 1 : -1)), 𝕊ᶻ(0)))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    savefig(plot(ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-z"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)), "Hexagon-2x2-SpinCoherentState-AFM-z.png")
+
+    coherent = SpinCoherentState(Dict(i=>iseven(i) ? [0.0, 0.0, 1.0] : [0.0, 0.0, -1.0] for i=1:length(lattice)))
+    ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, 1.0, 1), Zeeman(:h, Complex(-0.2), 'x'; amplitude=bond->iseven(bond[1].site) ? 1 : -1))))
+    eigensystem = ed(:eigen, EDEigen(); delay=true)
+    savefig(plot(ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-x"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)), "Hexagon-2x2-SpinCoherentState-AFM-x.png")
 end

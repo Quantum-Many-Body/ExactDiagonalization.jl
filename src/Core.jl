@@ -3,8 +3,8 @@ using KrylovKit: eigsolve
 using LinearAlgebra: I, dot
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf
-using QuantumLattices: eager, plain, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, reparameter, reset!, shape, statistics, totalspin, value
-using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
+using QuantumLattices: eager, plain, azimuth, bonds, decompose, expand, findindex, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, totalspin, value
+using QuantumLattices: Abelian, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeDict, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Metric, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, Operators, OperatorSum, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceEnumerative, VectorSpaceStyle, ℕ, 𝕊, 𝕊ᶻ, ℤ₁
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 
@@ -1211,3 +1211,127 @@ function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrel
 end
 @inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))...)
 @inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 1)
+
+"""
+    SpinCoherentState <: CompositeDict{Int, Tuple{Float64, Float64}}
+
+Spin coherent state on a block of lattice sites.
+
+The structure of the spin coherent state is specified by a `Dict{Int, Tuple{Float64, Float64}}`, which contains the site-(θ, ϕ) pairs with site being the site index in a lattice and (θ, ϕ) denoting the polar and azimuth angles in radians of the classical magnetic moment on this site.
+"""
+struct SpinCoherentState <: CompositeDict{Int, Tuple{Float64, Float64}}
+    structure::Dict{Int, Tuple{Float64, Float64}}
+end
+@inline getcontent(state::SpinCoherentState, ::Val{:contents}) = state.structure
+
+"""
+    SpinCoherentState(structure::AbstractDict{Int, <:AbstractVector{<:Number}})
+    SpinCoherentState(structure::AbstractDict{Int, <:NTuple{2, Number}}; unit::Symbol=:radian)
+
+Construct a spin coherent state on a block of lattice sites.
+"""
+function SpinCoherentState(structure::AbstractDict{Int, <:AbstractVector{<:Number}})
+    new = Dict{Int, NTuple{2, Float64}}()
+    for (site, direction) in structure
+        new[site] = (polar(direction), azimuth(direction))
+    end
+    return SpinCoherentState(new)
+end
+function SpinCoherentState(structure::AbstractDict{Int, <:NTuple{2, Number}}; unit::Symbol=:degree)
+    @assert unit∈(:degree, :radian) "SpinCoherentState error: unit must be either `:degree` or `:radian`."
+    new = Dict{Int, NTuple{2, Float64}}()
+    for (site, (θ, ϕ)) in structure
+        if unit==:degree
+            θ = deg2rad(θ)
+            ϕ = deg2rad(ϕ)
+        end
+        new[site] = (θ, ϕ)
+    end
+    return SpinCoherentState(new)
+end
+
+"""
+    (state::SpinCoherentState)(bases::AbelianBases, table::AbstractDict, dtype=ComplexF64) -> Vector{dtype}
+
+Get the vector representation of a spin coherent state with the given Abelian bases and table.
+"""
+function (state::SpinCoherentState)(bases::AbelianBases, table::AbstractDict, dtype=ComplexF64)
+    angles = permute!(collect(values(state)), sortperm(collect(keys(state)), by=site->table[𝕊(site, :α)]))
+    vs = [zeros(dtype, dimension(graded)) for graded in bases.locals]
+    for ((θ, ϕ), v) in zip(angles, vs)
+        S = (length(v)-1)//2
+        v[1] = one(dtype)
+        v[:] = exp(-1im*ϕ*matrix(𝕊{S}('z'))) * exp(-1im*θ*matrix(𝕊{S}('y'))) * v
+    end
+    intermediate = eltype(vs)[]
+    for positions in bases.partition
+        for (i, position) in enumerate(positions)
+            if i==1
+                push!(intermediate, vs[position])
+            else
+                intermediate[end] = kron(intermediate[end], vs[position])
+            end
+        end
+    end
+    result = intermediate[1]
+    for i = 2:length(intermediate)
+        result = kron(result, intermediate[i])
+    end
+    isa(Abelian(bases), ℤ₁) || (result = result[range(bases)])
+    return result
+end
+
+"""
+    SpinCoherentStateProjection <: Action
+
+Projection of states obtained by exact diagonalization method onto spin coherent states.
+"""
+struct SpinCoherentStateProjection <: Action
+    configuration::SpinCoherentState
+    polars::Vector{Float64}
+    azimuths::Vector{Float64}
+end
+@inline options(::Type{<:Assignment{<:SpinCoherentStateProjection}}) = basicoptions
+
+"""
+    SpinCoherentStateProjection
+
+Construct a `SpinCoherentStateProjection`.
+"""
+@inline function SpinCoherentStateProjection(configuration::SpinCoherentState, np::Integer, na::Integer)
+    return SpinCoherentStateProjection(configuration, range(0, pi, np), range(0, 2pi, na))
+end
+
+"""
+    SpinCoherentStateProjectionData <: Data
+
+Data of spin coherent state projection, including:
+
+1) `polars::Vector{Float64}`: global polar angles of the spin coherent states.
+2) `azimuths::Vector{Float64}`: global azimuth angles of the spin coherent states.
+3) `values::Matrix{Float64}`: projection of the state obtained by exact diagonalization method onto the spin coherent states.
+"""
+struct SpinCoherentStateProjectionData <: Data
+    polars::Vector{Float64}
+    azimuths::Vector{Float64}
+    values::Matrix{Float64}
+end
+function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStateProjection}; options...)
+    @assert length(ed.frontend.lattice)==length(projection.action.configuration) "run! error: mismatched lattice and magnetic moment configuration."
+    eigensystem = only(projection.dependencies)
+    @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
+    table = ed.frontend.matrixization.table
+    Ω = only(eigensystem.data.vectors)
+    sector = only(eigensystem.data.sectors)
+    Ψ = empty(projection.action.configuration)
+    result = zeros(Float64, length(projection.action.azimuths), length(projection.action.polars))
+    for (i, θ) in enumerate(projection.action.polars)
+        for (j, ϕ) in enumerate(projection.action.azimuths)
+            for (site, (θ₀, ϕ₀)) in projection.action.configuration
+                Ψ[site] = (θ+θ₀, ϕ+ϕ₀)
+            end
+            result[j, i] = abs2(dot(Ψ(sector, table), Ω))
+        end
+    end
+    return SpinCoherentStateProjectionData(projection.action.polars, projection.action.azimuths, result)
+end
