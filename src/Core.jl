@@ -1294,7 +1294,8 @@ end
 @inline options(::Type{<:Assignment{<:SpinCoherentStateProjection}}) = basicoptions
 
 """
-    SpinCoherentStateProjection
+    SpinCoherentStateProjection(configuration::SpinCoherentState, polars::AbstractVector{<:Real}, azimuths::AbstractVector{<:Real})
+    SpinCoherentStateProjection(configuration::SpinCoherentState, np::Integer, na::Integer)
 
 Construct a `SpinCoherentStateProjection`.
 """

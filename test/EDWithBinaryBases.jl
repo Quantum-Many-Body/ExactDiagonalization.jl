@@ -1,5 +1,5 @@
 using ExactDiagonalization
-using ExactDiagonalization: BinaryBasisRange, basistype
+using ExactDiagonalization: BinaryBasisRange, SectorFilter, basistype
 using Plots: plot, savefig
 using QuantumLattices: Abelian, Algorithm, BrillouinZone, Coulomb, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, ReciprocalPath, Table, ℕ, 𝕊ᶻ, ℤ₁
 using QuantumLattices: ⊕, ⊗, ⊠, add!, bonds, dimension, expand, getcontent, id, idtype, kind, matrix, parameternames, reciprocals, scalartype, update!, 𝕔, 𝕔⁺𝕔, @rectangle_str, @σ_str
