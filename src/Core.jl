@@ -318,12 +318,12 @@ end
 @inline release!(ed::Algorithm{<:ED}; gc::Bool=true) = release!(ed.frontend; gc=gc)
 
 """
-    matrix(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) -> OperatorSum{<:EDMatrix}
-    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) -> OperatorSum{<:EDMatrix}
+    matrix(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false) -> OperatorSum{<:EDMatrix}
+    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false) -> OperatorSum{<:EDMatrix}
 
 Get the sparse matrix representation of a quantum lattice system in the target space.
 """
-function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false, kwargs...)
+function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(ed.H)
@@ -331,7 +331,7 @@ function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false, kwargs.
     release && release!(ed; gc=true)
     return result
 end
-function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...)
+function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, release::Bool=false)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(SectorFilter(sector, sectors...)(ed.H))
@@ -339,16 +339,16 @@ function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=e
     release && release!(ed; gc=true)
     return result
 end
-function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, kwargs...)
+function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, release::Bool=false)
     sectors = eltype(eltype(ed.matrixization.brakets))[]
     for (bra, ket) in ed.matrixization.brakets
         @assert bra==ket "matrix error: unequal bra and ket Hilbert spaces found."
         Abelian(bra)∈(quantumnumber, quantumnumbers...) && push!(sectors, bra)
     end
-    return matrix(ed, sectors...; timer=timer, kwargs...)
+    return matrix(ed, sectors...; timer=timer, release=release)
 end
-function matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; kwargs...)
-    return matrix(ed.frontend, sectors...; timer=ed.timer, kwargs...)
+function matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false)
+    return matrix(ed.frontend, sectors...; timer=ed.timer, release=release)
 end
 
 """
