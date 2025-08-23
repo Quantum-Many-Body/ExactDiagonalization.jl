@@ -1,5 +1,8 @@
 module ExactDiagonalization
 
+# Prerequisites
+include("BandLanczos.jl")
+
 # Core
 include("Core.jl")
 export edtimer, eigen, prepare!, productable, release!, sumable
