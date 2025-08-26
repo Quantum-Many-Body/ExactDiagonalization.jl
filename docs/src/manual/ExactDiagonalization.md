@@ -1,9 +1,10 @@
+# Core of ExactDiagonalization
+
 ```@meta
 CurrentModule = ExactDiagonalization
 ```
 
-## Core of ExactDiagonalization
-
 ```@autodocs
 Modules = [ExactDiagonalization]
+Order = [:module, :constant, :type, :macro, :function]
 ```

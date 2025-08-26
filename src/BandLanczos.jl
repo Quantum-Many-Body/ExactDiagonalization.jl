@@ -1,11 +1,17 @@
 module BandLanczos
 
 using KrylovKit: Block, KrylovFactorization, KrylovIterator, OrthonormalBasis, add!!, apply, block_inner, block_qr!, block_reorthogonalize!
-import KrylovKit: basis, rayleighquotient, residual, normres, rayleighextension, expand!, initialize
+import KrylovKit: basis, expand!, initialize, normres, rayleighextension, rayleighquotient, residual
 using LinearAlgebra: I, norm
 
 export BandLanczosFactorization, BandLanczosIterator
+export basis, expand!, initialize, normres, rayleighextension, rayleighquotient, residual
 
+"""
+    BandLanczosFactorization{T, S<:Number, SR<:Real} <: KrylovFactorization{T, S}
+
+Band Lanczos factorization, same to [`KrylovKit.BlockLanczosFactorization`](https://jutho.github.io/KrylovKit.jl/stable/man/implementation/#KrylovKit.BlockLanczosFactorization) except that the Krylov basis vectors can be chosen to be kept or not.
+"""
 mutable struct BandLanczosFactorization{T, S<:Number, SR<:Real} <: KrylovFactorization{T, S}
     k::Int
     V::OrthonormalBasis{T}

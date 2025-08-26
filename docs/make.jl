@@ -20,7 +20,10 @@ makedocs(;
             "examples/HeisenbergModel.md",
             "examples/FractionalChernInsulatorOfHardCoreBosons.md",
         ],
-        "Manual" => "manul.md",
+        "Manual" => [
+            "manual/ExactDiagonalization.md",
+            "manual/BandLanczos.md",
+        ]
     ]
 )
 
