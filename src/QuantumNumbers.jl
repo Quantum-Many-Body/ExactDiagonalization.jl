@@ -6,13 +6,13 @@ using DataStructures: OrderedDict
 using HalfIntegers: HalfInt
 using LinearAlgebra: norm
 using Printf: @printf
-using QuantumLattices: id, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceGeneral, VectorSpaceStyle, efficientoperations, subscript
+using QuantumLattices: id, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceStyle, efficientoperations, subscript
 using Random: seed!
 
 import QuantumLattices: ⊕, ⊗, decompose, dimension, period, periods, rank, value
 
 export Abelian, AbelianQuantumNumber, AbelianQuantumNumberProd, AbelianGradedSpace, AbelianGradedSpaceProd, AbelianGradedSpaceSum, Graded, RepresentationSpace, SimpleAbelianQuantumNumber
-export ⊕, ⊗, ⊠, ℕ, 𝕊ᶻ, 𝕌₁, ℤ, ℤ₁, ℤ₂, ℤ₃, ℤ₄, fℤ₂, sℤ₂, decompose, dimension, findindex, period, periods, rank, regularize, regularize!, value
+export ⊕, ⊗, ⊠, ℕ, 𝕊ᶻ, 𝕌₁, ℤ, ℤ₁, fℤ₂, sℤ₂, decompose, dimension, findindex, period, periods, rank, regularize, regularize!, value
 
 """
     AbelianQuantumNumber
@@ -165,52 +165,40 @@ end
 """
     ℤ{N} <: SimpleAbelianQuantumNumber
 
-ℤₙ quantum numbers.
+Abstract type of ℤₙ quantum numbers.
 """
-struct ℤ{N} <: SimpleAbelianQuantumNumber
+abstract type ℤ{N} <: SimpleAbelianQuantumNumber end
+@inline period(::Type{<:ℤ{N}}) where N = N
+
+"""
+    ℤ₁ <: ℤ{1}
+
+ℤ₁, i.e., the trivial quantum number.
+"""
+struct ℤ₁ <: ℤ{1}
     charge::Int
-    function ℤ{N}(charge::Integer) where N
-        @assert N>0 "ℤ error: non-positive period ($N)."
-        new{N}(mod(charge, N))
-    end
+    ℤ₁(charge::Integer=0) = new(0)
 end
-@inline period(::Type{ℤ{N}}) where N = N
-@inline Base.show(io::IO, ::Type{ℤ{N}}) where N = @printf io "ℤ%s" N<5 ? subscript(N) : string("{", N, "}")
 
 """
-    const ℤ₁ = ℤ{1}
-    const ℤ₂ = ℤ{2}
-    const ℤ₃ = ℤ{3}
-    const ℤ₄ = ℤ{4}
-
-Alias for ℤ₁/ℤ₂/ℤ₃/ℤ₄ quantum numbers.
-"""
-const ℤ₁ = ℤ{1}
-const ℤ₂ = ℤ{2}
-const ℤ₃ = ℤ{3}
-const ℤ₄ = ℤ{4}
-
-"""
-    fℤ₂ <: SimpleAbelianQuantumNumber
+    fℤ₂ <: ℤ{2}
 
 Fermion parity.
 """
-struct fℤ₂ <: SimpleAbelianQuantumNumber
+struct fℤ₂ <: ℤ{2}
     charge::Int
     fℤ₂(charge::Integer) = new(mod(charge, 2))
 end
-@inline period(::Type{fℤ₂}) = 2
 
 """
-    sℤ₂ <: SimpleAbelianQuantumNumber
+    sℤ₂ <: ℤ{2}
 
 Spin parity.
 """
-struct sℤ₂ <: SimpleAbelianQuantumNumber
+struct sℤ₂ <: ℤ{2}
     charge::Int
     sℤ₂(charge::Integer) = new(mod(charge, 2))
 end
-@inline period(::Type{sℤ₂}) = 2
 
 """
     AbelianQuantumNumberProd{T<:Tuple{Vararg{SimpleAbelianQuantumNumber}}} <: AbelianQuantumNumber
@@ -347,20 +335,8 @@ Abstract type of quantum representation spaces of Abelian groups.
 abstract type RepresentationSpace{QN<:AbelianQuantumNumber} <: VectorSpace{QN} end
 @inline Base.show(io::IO, ::MIME"text/plain", rs::RepresentationSpace) = show(io, rs)
 @inline dimension(::Type{<:RepresentationSpace}) = Int
-@inline Base.range(::Type{<:RepresentationSpace}) = UnitRange{Int}
-
-"""
-    dimension(rs::RepresentationSpace, i::Integer) -> Int
-
-Get the degenerate dimension of the ith Abelian quantum number contained in a representation space.
-"""
 @inline dimension(rs::RepresentationSpace, i::Integer) = dimension(rs, CartesianIndex(i, rs))
-
-"""
-    range(rs::RepresentationSpace, i::Integer)
-
-Get the slice of the degenerate dimension of the ith Abelian quantum number contained in a representation space.
-"""
+@inline Base.range(::Type{<:RepresentationSpace}) = UnitRange{Int}
 @inline Base.range(rs::RepresentationSpace, i::Integer) = range(rs, CartesianIndex(i, rs))
 
 """
@@ -443,9 +419,6 @@ struct AbelianGradedSpace{QN<:AbelianQuantumNumber} <: RepresentationSpace{QN}
     contents::OrderedDict{QN, UnitRange{Int}}
     dual::Bool
 end
-@inline Base.getindex(style::VectorSpaceGeneral, gs::AbelianGradedSpace, i::Integer) = getindex(style, gs, CartesianIndex(i, gs))
-@inline CartesianIndex(i::Integer, ::AbelianGradedSpace) = CartesianIndex(i)
-@inline Base.getindex(::VectorSpaceGeneral, gs::AbelianGradedSpace, i::CartesianIndex) = inv(id(gs.contents, i), gs.dual)
 function Base.show(io::IO, gs::AbelianGradedSpace)
     @printf io "Graded{%s}(" eltype(gs)
     for (i, qn) in enumerate(keys(gs.contents))
@@ -522,6 +495,15 @@ Get the number of inequivalent irreducible representations (i.e., the Abelian qu
 @inline Base.length(gs::AbelianGradedSpace) = length(gs.contents)
 
 """
+    getindex(gs::AbelianGradedSpace, i::Union{Integer, CartesianIndex})
+
+Get the ith Abelian quantum number contained in an Abelian graded space.
+"""
+@inline Base.getindex(gs::AbelianGradedSpace, i::Integer) = getindex(gs, CartesianIndex(i, gs))
+@inline Base.getindex(gs::AbelianGradedSpace, i::CartesianIndex) = inv(id(gs.contents, i), gs.dual)
+@inline Base.CartesianIndex(i::Integer, ::AbelianGradedSpace) = CartesianIndex(i)
+
+"""
     getindex(gs::AbelianGradedSpace, indexes::AbstractVector{<:Integer}) -> typeof(gs)
     getindex(gs::AbelianGradedSpace{QN}, quantumnumbers::AbstractVector{QN}) where {QN<:AbelianQuantumNumber} -> AbelianGradedSpace{QN}
 
@@ -568,7 +550,7 @@ Get the total dimension of an Abelian graded space.
 @inline dimension(gs::AbelianGradedSpace) = last(gs.contents).second.stop
 
 """
-    dimension(gs::AbelianGradedSpace, qn::CartesianIndex) -> Int
+    dimension(gs::AbelianGradedSpace, qn::Union{Integer, CartesianIndex}) -> Int
     dimension(gs::AbelianGradedSpace{QN}, qn::QN) where {QN<:AbelianQuantumNumber} -> Int
 
 Get the degenerate dimension of an Abelian quantum number contained in an Abelian graded space.
@@ -577,7 +559,7 @@ Get the degenerate dimension of an Abelian quantum number contained in an Abelia
 @inline dimension(gs::AbelianGradedSpace{QN}, qn::QN) where {QN<:AbelianQuantumNumber} = length(gs.contents[inv(qn, gs.dual)])
 
 """
-    range(gs::AbelianGradedSpace, qn::CartesianIndex) -> UnitRange{Int}
+    range(gs::AbelianGradedSpace, qn::Union{Integer, CartesianIndex}) -> UnitRange{Int}
     range(gs::AbelianGradedSpace{QN}, qn::QN) where {QN<:AbelianQuantumNumber} -> UnitRange{Int}
 
 Get the slice of the degenerate dimension of an Abelian quantum number contained in an Abelian graded space.
@@ -679,7 +661,7 @@ Get the total dimension of the direct sum of several Abelian graded spaces.
 @inline dimension(rs::AbelianGradedSpaceSum) = sum(dimension, rs.contents)
 
 """
-    dimension(rs::AbelianGradedSpaceSum, i::CartesianIndex) -> Int
+    dimension(rs::AbelianGradedSpaceSum, i::Union{Integer, CartesianIndex}) -> Int
 
 Get the degenerate dimension of the ith Abelian quantum number in the direct sum of several Abelian graded spaces.
 """
@@ -689,7 +671,7 @@ Get the degenerate dimension of the ith Abelian quantum number in the direct sum
 end
 
 """
-    range(rs::AbelianGradedSpaceSum, i::CartesianIndex) -> UnitRange{Int}
+    range(rs::AbelianGradedSpaceSum, i::Union{Integer, CartesianIndex}) -> UnitRange{Int}
 
 Get the slice of the degenerate dimension of the ith Abelian quantum number in the direct sum of several Abelian graded spaces.
 """
@@ -740,7 +722,7 @@ Get the total dimension of the direct product of several Abelian graded spaces.
 @inline dimension(rs::AbelianGradedSpaceProd) = prod(dimension, rs.contents)
 
 """
-    dimension(rs::AbelianGradedSpaceProd, i::CartesianIndex) -> Int
+    dimension(rs::AbelianGradedSpaceProd, i::Union{Integer, CartesianIndex}) -> Int
 
 Get the degenerate dimension of the ith Abelian quantum number in the direct product of several Abelian graded spaces.
 """
@@ -754,7 +736,7 @@ Get the degenerate dimension of the Abelian quantum number fused by `qns` in the
 @inline dimension(rs::AbelianGradedSpaceProd{N, QN}, qns::NTuple{N, QN}) where {N, QN<:AbelianQuantumNumber} = prod(map(dimension, rs.contents, qns))
 
 """
-    range(rs::AbelianGradedSpaceProd, i::CartesianIndex) -> AbstractVector{Int}
+    range(rs::AbelianGradedSpaceProd, i::Union{Integer, CartesianIndex}) -> AbstractVector{Int}
 
 Get the slice of the degenerate dimension of the ith Abelian quantum number in the direct product of several Abelian graded spaces.
 """
