@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = QuantumLattices.QuantumNumbers
+CurrentModule = ExactDiagonalization.QuantumNumbers
 ```
 
 # Quantum numbers

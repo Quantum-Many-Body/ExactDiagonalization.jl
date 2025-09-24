@@ -22,6 +22,7 @@ makedocs(;
         ],
         "Manual" => [
             "manual/ExactDiagonalization.md",
+            "manual/QuantumNumbers.md",
             "manual/BandLanczos.md",
         ]
     ]
