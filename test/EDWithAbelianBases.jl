@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using Plots: plot, savefig
-using QuantumLattices: Abelian, Algorithm, BrillouinZone, Graded, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, ReciprocalZone, Spin, Table, Zeeman, 𝕊, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊠, bonds, dimension, expand, id, matrix, partition, reciprocals, @hexagon_str, @rectangle_str
+using QuantumLattices: Algorithm, BrillouinZone, Heisenberg, Hilbert, Lattice, Metric, Operator, OperatorIndexToTuple, ReciprocalPath, ReciprocalZone, Spin, Table, Zeeman, 𝕊
+using QuantumLattices: bonds, dimension, expand, id, matrix, partition, reciprocals, @hexagon_str, @rectangle_str
 using SparseArrays: SparseMatrixCSC
 
 @testset "AbelianBases" begin

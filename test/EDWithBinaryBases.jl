@@ -1,8 +1,8 @@
 using ExactDiagonalization
 using ExactDiagonalization: BinaryBasisRange, SectorFilter, basistype
 using Plots: plot, savefig
-using QuantumLattices: Abelian, Algorithm, BrillouinZone, Coulomb, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, ReciprocalPath, Table, ℕ, 𝕊ᶻ, ℤ₁
-using QuantumLattices: ⊕, ⊗, ⊠, add!, bonds, dimension, expand, getcontent, id, idtype, kind, matrix, parameternames, reciprocals, scalartype, update!, 𝕔, 𝕔⁺𝕔, @rectangle_str, @σ_str
+using QuantumLattices: Algorithm, BrillouinZone, Coulomb, Fock, Hilbert, Hopping, Hubbard, Lattice, Metric, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, ReciprocalPath, Table
+using QuantumLattices: σ⁺, σ⁻, σᶻ, ⊕, ⊗, add!, bonds, dimension, expand, getcontent, id, idtype, kind, matrix, parameternames, reciprocals, scalartype, update!, 𝕔, 𝕔⁺, 𝕔⁺𝕔, @rectangle_str
 using SparseArrays: SparseMatrixCSC
 
 @testset "BinaryBasis" begin
@@ -95,7 +95,7 @@ end
 end
 
 @testset "matrix" begin
-    indexes = [𝕔(i, 1, 0, 1, [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    indexes = [𝕔(i, 1, 0, [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
     table = Table(indexes, OperatorIndexToTuple(:site, :orbital, :spin))
 
     braket = (BinaryBases(1:4, ℕ(2)), BinaryBases(1:4, ℕ(3)))
@@ -137,7 +137,7 @@ end
 end
 
 @testset "EDMatrixization & SectorFilter" begin
-    indexes = [𝕔(i, 1, 0, 1, [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
+    indexes = [𝕔(i, 1, 0, [0.0, 0.0], [0.0, 0.0]) for i = 1:4]
     table = Table(indexes, OperatorIndexToTuple(:site, :orbital, :spin))
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃
@@ -168,9 +168,9 @@ end
     @test EDKind(hilbert) == EDKind(typeof(hilbert)) == EDKind(fock) == EDKind(typeof(fock)) == EDKind(:Binary)
     @test Metric(EDKind(hilbert), hilbert) == OperatorIndexToTuple(:spin, :site, :orbital)
 
-    internalindex = 𝕔(1, 1, 1)
-    index = 𝕔(1, 1, 1, 1)
-    coordinatedindex = 𝕔(1, 1, 1, 1, [0.0], [0.0])
+    internalindex = 𝕔(1, 1)
+    index = 𝕔(1, 1, 1)
+    coordinatedindex = 𝕔(1, 1, 1, [0.0], [0.0])
     @test EDKind(internalindex) == EDKind(typeof(internalindex)) == EDKind(index) == EDKind(typeof(index)) == EDKind(coordinatedindex) == EDKind(typeof(coordinatedindex)) == EDKind(:Binary)
 end
 
@@ -234,7 +234,7 @@ end
     hilbert = Hilbert(Fock{:f}(1, 1), length(lattice))
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    nᵢ = [𝕔(i, 1, 0, 2)*𝕔(i, 1, 0, 1) for i = 1:length(lattice)]
+    nᵢ = [𝕔⁺(i, 1, 0)*𝕔(i, 1, 0) for i = 1:length(lattice)]
     expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem; nev=1)
     nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
     savefig(plot(ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png")
@@ -247,7 +247,7 @@ end
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
     ed = Algorithm(Symbol("Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ"+", :)*𝕔⁺𝕔(:, :, σ"-", :) + 1//2*𝕔⁺𝕔(:, :, σ"-", :)*𝕔⁺𝕔(:, :, σ"+", :) + 𝕔⁺𝕔(:, :, σ"z", :)*𝕔⁺𝕔(:, :, σ"z", :)), bond, hilbert) for bond in bonds(lattice, :)]
+    SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ⁺)*𝕔⁺𝕔(:, :, σ⁻) + 1//2*𝕔⁺𝕔(:, :, σ⁻)*𝕔⁺𝕔(:, :, σ⁺) + 𝕔⁺𝕔(:, :, σᶻ)*𝕔⁺𝕔(:, :, σᶻ)), bond, hilbert) for bond in bonds(lattice, :)]
     savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(reciprocals(unitcell), 100)), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
     savefig(plot(ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(reciprocals(unitcell), rectangle"Γ-X-M-Γ")), eigensystem; nev=1)), "Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
 end
