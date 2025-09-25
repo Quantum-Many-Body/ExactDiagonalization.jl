@@ -6,7 +6,7 @@ using DataStructures: OrderedDict
 using HalfIntegers: HalfInt
 using LinearAlgebra: norm
 using Printf: @printf
-using QuantumLattices: id, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceStyle, efficientoperations, subscript
+using QuantumLattices: id, CompositeIndex, FockIndex, Index, OperatorProd, OperatorSet, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceStyle, efficientoperations
 using Random: seed!
 
 import QuantumLattices: ⊕, ⊗, decompose, dimension, period, periods, rank, value
@@ -828,70 +828,70 @@ function Base.split(target::QN, rs::AbelianGradedSpaceProd{N, QN}; nmax::Real=20
     return result
 end
 
-# """
-#     (op::OperatorProd)(quantumnumber::Abelian) -> Abelian
+"""
+    (index::FockIndex)(quantumnumber::ℤ₁) -> ℤ₁
+    (index::FockIndex)(quantumnumber::ℕ) -> ℕ
+    (index::FockIndex)(quantumnumber::𝕊ᶻ) -> 𝕊ᶻ
+    (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ)) -> ℕ ⊠ 𝕊ᶻ
+    (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ)) -> 𝕊ᶻ ⊠ ℕ
 
-# Get the resulting Abelian quantum number after an `OperatorProd` acts upon an initial Abelian quantum number.
-# """
-# function (op::OperatorProd)(quantumnumber::Abelian)
-#     result = quantumnumber
-#     for u in op
-#         result = u(result)
-#     end
-#     return result
-# end
+Get the resulting Abelian quantum number after a `FockIndex` acts upon an initial Abelian quantum number.
+"""
+@inline (::FockIndex)(quantumnumber::ℤ₁) = quantumnumber
+@inline (index::FockIndex)(quantumnumber::ℕ) = index.nambu==2 ? ℕ(value(quantumnumber)+1) : ℕ(value(quantumnumber)-1)
+@inline (index::FockIndex)(quantumnumber::𝕊ᶻ) = index.nambu==2 ? 𝕊ᶻ(value(quantumnumber)+index.spin) : 𝕊ᶻ(value(quantumnumber)-index.spin)
+@inline function (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ))
+    n, m = values(quantumnumber)
+    return index.nambu==2 ? (ℕ ⊠ 𝕊ᶻ)(n+1, m+index.spin) : (ℕ ⊠ 𝕊ᶻ)(n-1, m-index.spin)
+end
+@inline function (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ))
+    m, n = values(quantumnumber)
+    return index.nambu==2 ? (𝕊ᶻ ⊠ ℕ)(m+index.spin, n+1) : (𝕊ᶻ ⊠ ℕ)(m-index.spin, n-1)
+end
 
-# """
-#     (ops::OperatorSet)(quantumnumber::Abelian) -> Abelian
+"""
+    (index::Index)(quantumnumber::Abelian) -> Abelian
 
-# Get the resulting Abelian quantum number after an `OperatorSet` acts upon an initial Abelian quantum number.
-# """
-# function (ops::OperatorSet)(quantumnumber::Abelian)
-#     result, record = quantumnumber, quantumnumber
-#     for (i, op) in enumerate(ops)
-#         result = op(quantumnumber)
-#         if i>1
-#             @assert result==record "error: not a definite quantum number obtained."
-#         else
-#             record = result
-#         end
-#     end
-#     return result
-# end
+Get the resulting Abelian quantum number after an `Index` acts upon an initial Abelian quantum number.
+"""
+@inline (index::Index)(quantumnumber::Abelian) = index.internal(quantumnumber)
 
-# """
-#     (index::Index)(quantumnumber::Abelian) -> Abelian
+"""
+    (index::CompositeIndex)(quantumnumber::Abelian) -> Abelian
 
-# Get the resulting Abelian quantum number after an `Index` acts upon an initial Abelian quantum number.
-# """
-# @inline (index::Index)(quantumnumber::Abelian) = index.internal(quantumnumber)
+Get the resulting Abelian quantum number after a `CompositeIndex` acts upon an initial Abelian quantum number.
+"""
+@inline (index::CompositeIndex)(quantumnumber::Abelian) = Index(index)(quantumnumber)
 
-# """
-#     (index::CompositeIndex)(quantumnumber::Abelian) -> Abelian
+"""
+    (op::OperatorProd)(quantumnumber::Abelian) -> Abelian
 
-# Get the resulting Abelian quantum number after a `CompositeIndex` acts upon an initial Abelian quantum number.
-# """
-# @inline (index::CompositeIndex)(quantumnumber::Abelian) = Index(index)(quantumnumber)
+Get the resulting Abelian quantum number after an `OperatorProd` acts upon an initial Abelian quantum number.
+"""
+function (op::OperatorProd)(quantumnumber::Abelian)
+    result = quantumnumber
+    for u in op
+        result = u(result)
+    end
+    return result
+end
 
-# """
-#     (index::FockIndex)(quantumnumber::ℤ₁) -> ℤ₁
-#     (index::FockIndex)(quantumnumber::ℕ) -> ℕ
-#     (index::FockIndex)(quantumnumber::𝕊ᶻ) -> 𝕊ᶻ
-#     (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ)) -> ℕ ⊠ 𝕊ᶻ
-#     (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ)) -> 𝕊ᶻ ⊠ ℕ
+"""
+    (ops::OperatorSet)(quantumnumber::Abelian) -> Abelian
 
-# Get the resulting Abelian quantum number after a `FockIndex` acts upon an initial Abelian quantum number.
-# """
-# @inline (::FockIndex)(quantumnumber::ℤ₁) = quantumnumber
-# @inline (index::FockIndex)(quantumnumber::ℕ) = index.nambu==2 ? ℕ(value(quantumnumber)+1) : ℕ(value(quantumnumber)-1)
-# @inline (index::FockIndex)(quantumnumber::𝕊ᶻ) = index.nambu==2 ? 𝕊ᶻ(value(quantumnumber)+index.spin) : 𝕊ᶻ(value(quantumnumber)-index.spin)
-# @inline function (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ))
-#     n, m = values(quantumnumber)
-#     return index.nambu==2 ? (ℕ ⊠ 𝕊ᶻ)(n+1, m+index.spin) : (ℕ ⊠ 𝕊ᶻ)(n-1, m-index.spin)
-# end
-# @inline function (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ))
-#     m, n = values(quantumnumber)
-#     return index.nambu==2 ? (𝕊ᶻ ⊠ ℕ)(m+index.spin, n+1) : (𝕊ᶻ ⊠ ℕ)(m-index.spin, n-1)
-# end
+Get the resulting Abelian quantum number after an `OperatorSet` acts upon an initial Abelian quantum number.
+"""
+function (ops::OperatorSet)(quantumnumber::Abelian)
+    result, record = quantumnumber, quantumnumber
+    for (i, op) in enumerate(ops)
+        result = op(quantumnumber)
+        if i>1
+            @assert result==record "error: not a definite quantum number obtained."
+        else
+            record = result
+        end
+    end
+    return result
+end
 
 end #module
