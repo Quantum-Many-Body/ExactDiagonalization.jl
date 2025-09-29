@@ -1,8 +1,9 @@
 module BandLanczos
 
 using KrylovKit: Block, KrylovFactorization, KrylovIterator, OrthonormalBasis, add!!, apply, block_inner, block_qr!, block_reorthogonalize!
-import KrylovKit: basis, expand!, initialize, normres, rayleighextension, rayleighquotient, residual
 using LinearAlgebra: I, norm
+
+import KrylovKit: basis, expand!, initialize, normres, rayleighextension, rayleighquotient, residual
 
 export BandLanczosFactorization, BandLanczosIterator
 export basis, expand!, initialize, normres, rayleighextension, rayleighquotient, residual
