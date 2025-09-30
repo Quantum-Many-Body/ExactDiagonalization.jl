@@ -1,19 +1,3 @@
-module QuantumNumbers
-
-using Base: @propagate_inbounds
-using Base.Iterators: product
-using DataStructures: OrderedDict
-using HalfIntegers: HalfInt
-using LinearAlgebra: norm
-using Printf: @printf
-using QuantumLattices: id, CompositeIndex, FockIndex, Index, OperatorProd, OperatorSet, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceStyle, efficientoperations
-using Random: seed!
-
-import QuantumLattices: ⊕, ⊗, decompose, dimension, period, periods, rank, value
-
-export Abelian, AbelianQuantumNumber, AbelianQuantumNumberProd, AbelianGradedSpace, AbelianGradedSpaceProd, AbelianGradedSpaceSum, Graded, RepresentationSpace, SimpleAbelianQuantumNumber
-export ⊕, ⊗, ⊠, ℕ, 𝕊ᶻ, 𝕌₁, ℤ, ℤ₁, fℤ₂, sℤ₂, decompose, dimension, findindex, period, periods, rank, regularize, regularize!, value
-
 """
     AbelianQuantumNumber
 
@@ -893,5 +877,3 @@ function (ops::OperatorSet)(quantumnumber::Abelian)
     end
     return result
 end
-
-end #module

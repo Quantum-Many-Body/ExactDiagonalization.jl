@@ -1,5 +1,5 @@
 using Base.Iterators: product
-using ExactDiagonalization.QuantumNumbers
+using ExactDiagonalization
 using QuantumLattices: 𝕔, 𝕔⁺
 
 @testset "AbelianQuantumNumber" begin
