@@ -4,6 +4,7 @@ module ExactDiagonalization
 # Band Lanczos
 include("BandLanczos.jl")
 
+# Body of ExactDiagonalization
 using Base: @propagate_inbounds
 using Base.Iterators: product
 using DataStructures: OrderedDict
@@ -23,30 +24,30 @@ using .BandLanczos: BandLanczosFactorization, BandLanczosIterator
 import LinearAlgebra: eigen
 import QuantumLattices: Parameters, ⊗, ⊕, add!, decompose, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, reset!, run!, scalartype, update!, value
 
-# Quantum numbers
+## Quantum numbers
 include("QuantumNumbers.jl")
 export Abelian, AbelianQuantumNumber, AbelianQuantumNumberProd, AbelianGradedSpace, AbelianGradedSpaceProd, AbelianGradedSpaceSum, Graded, RepresentationSpace, SimpleAbelianQuantumNumber
 export ⊕, ⊗, ⊠, ℕ, 𝕊ᶻ, 𝕌₁, ℤ, ℤ₁, fℤ₂, sℤ₂, decompose, dimension, findindex, period, periods, rank, regularize, regularize!, value
 
-# Core
+## Core
 include("Core.jl")
 export edtimer, eigen, id, kind, matrix, prepare!, productable, release!, reset!, scalartype, sumable, update!
 export ED, EDKind, EDMatrix, EDMatrixization, Sector
 
-# BinaryBases
+## BinaryBases
 include("BinaryBases.jl")
 export BinaryBases, BinaryBasis
 
-# AbelianBases
+## AbelianBases
 include("AbelianBases.jl")
 export AbelianBases
 export partition
 
-# # GreenFunctions
-# include("GreenFunctions.jl")
-# export GreenFunction, RetardedGreenFunction
+## GreenFunctions
+include("GreenFunctions.jl")
+export GreenFunction, RetardedGreenFunction
 
-# Assignments
+## Assignments
 include("Assignments.jl")
 export EDEigen, EDEigenData
 export GroundStateExpectation, GroundStateExpectationData
