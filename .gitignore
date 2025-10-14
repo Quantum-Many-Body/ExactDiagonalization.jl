@@ -1,10 +1,13 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+Manifest.toml
 
 deps/deps.jl
 docs/build/
+docs/Manifest.toml
 test/*.png
+test/Manifest.toml
 
 .ipynb_checkpoints/
 
