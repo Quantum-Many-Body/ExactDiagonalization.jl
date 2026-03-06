@@ -9,7 +9,7 @@ using Base: @propagate_inbounds
 using Base.Iterators: product
 using DataStructures: OrderedDict
 using HalfIntegers: HalfInt
-using KrylovKit: Block, eigsolve, expand!, initialize, rayleighquotient
+using KrylovKit: Block, eigsolve, expand!, initialize, normres, rayleighquotient
 using LinearAlgebra: I, Hermitian, dot, norm
 using LuxurySparse: SparseMatrixCOO
 using Printf: @printf

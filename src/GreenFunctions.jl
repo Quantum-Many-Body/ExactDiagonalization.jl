@@ -24,13 +24,11 @@ Get the size of an `AbstractGreenFunction`.
 @inline Base.size(gf::AbstractGreenFunction) = (rank(gf), rank(gf))
 
 """
-    (gf::AbstractGreenFunction)(ω::Number; sign::Bool=false) -> Matrix{promote_type(typeof(ω), eltype(gf))}
+    (gf::AbstractGreenFunction)(ω::Number) -> Matrix{promote_type(typeof(ω), eltype(gf))}
 
 Get the values of an `AbstractGreenFunction` at `ω`.
-
-When `sign` is `true`, the opposite will be taken in the result.
 """
-@inline (gf::AbstractGreenFunction)(ω::Number; sign::Bool=false) = gf(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), ω; sign)
+@inline (gf::AbstractGreenFunction)(ω::Number) = gf(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), ω)
 
 """
     GreenFunction{T<:Number, V<:Real} <: AbstractGreenFunction{T}
@@ -40,10 +38,9 @@ Green function obtained by Krylov space expansion.
 struct GreenFunction{T<:Number, V<:Real} <: AbstractGreenFunction{T}
     Q::Matrix{T}
     E::Vector{V}
-    sign::Bool
-    function GreenFunction(Q::AbstractMatrix{<:Number}, E::AbstractVector{<:Number}, sign::Bool)
-        @assert size(Q, 2)==length(E) "GreenFunction error: mismatched E and Q."
-        new{eltype(Q), eltype(E)}(Q, E, sign)
+    function GreenFunction(Q::AbstractMatrix{<:Number}, E::AbstractVector{<:Number})
+        @assert size(Q, 2)==length(E) "GreenFunction error: mismatched Q and E."
+        new{eltype(Q), eltype(E)}(Q, E)
     end
 end
 
@@ -64,24 +61,14 @@ Get the dimension of the Krylov space expanded to obtained a `GreenFunction`.
 """
     (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false) -> typeof(dest)
 
-Get the values of a `GreenFunction` at `ω` and add the result to `dest`.
+Get the values of a `GreenFunction` at `ω` and add the result to `dest` (when `sign` is `false`) or substrate the result from `dest` (when `sign` is `true`).
 """
 function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false)
-    if gf.sign
-        # case of lesser Green's function
-        for i = 1:rank(gf), j = 1:rank(gf)
-            for k in 1:dimension(gf)
-                coeff = (-1)^sign / (ω+gf.E[k])
-                dest[i, j] += coeff * Q[j, k] * (Q[i, k])'
-            end
-        end
-    else
-        # case of greater Green's function
-        for i = 1:rank(gf), j = 1:rank(gf)
-            for k in 1:dimension(gf)
-                coeff = (-1)^sign / (ω-gf.E[k])
-                dest[i, j] += coeff * Q[i, k] * (Q[j, k])'
-            end
+    factor = sign ? -1 : 1
+    for i = 1:rank(gf), j = 1:rank(gf)
+        for k in 1:dimension(gf)
+            coeff = factor / (ω-gf.E[k])
+            dest[i, j] += coeff * gf.Q[i, k] * conj(gf.Q[j, k])
         end
     end
     return dest
@@ -89,64 +76,79 @@ end
 
 """
     reset!(
-        gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{AbstractVector{<:Number}}, E₀::Real;
-        ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
+        gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, kind::Symbol;
+        ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf), tol::Real=1e-12
     ) -> typeof(gf)
 
 Reset (a block) of `GreenFunction`.
 """
 function reset!(
-    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{AbstractVector{<:Number}}, E₀::Real;
-    ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
+    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, kind::Symbol;
+    ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf), tol::Real=1e-12
 )
     @assert allequal(size(H)) "reset! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
     @assert length(ranks)==length(V) "reset! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
+    @assert kind∈(:greater, :lesser) "reset! error: kind must be either `:greater` or `lesser`."
     Q = zeros(eltype(gf), length(V), length(dimensions))
-    iter = BandLanczosIterator(H, Block(V), length(dimensions)+length(V); keepvecs=false)
+    iter = BandLanczosIterator(H, Block(deepcopy(V)), length(dimensions)+length(V), tol; keepvecs=false)
     fact = initialize(iter)
-    dim = 0
-    while dim <= length(dimensions)
+    offset = 0
+    while true
         basis = fact.V
         for (i, b) in enumerate(basis)
-            i += dim
+            i += offset
             if i <= length(dimensions)
                 for (j, v) in enumerate(V)
-                    Q[j, i+dim] = dot(v, b)
+                    Q[j, i] = dot(v, b)
                 end
             end
         end
-        dim = length(fact)
-        dim<length(dimensions) && expand!(iter, fact)
+        if length(fact)<length(dimensions) && normres(fact)>iter.tol
+            offset = length(fact)
+            expand!(iter, fact)
+        else
+            break
+        end
     end
-    E, U = eigen(Hermitian(rayleighquotient(fact)))
-    gf.Q[ranks, dimensions] = Q*U
-    for i = 1:length(dimensions)
-        gf.E[dimensions[i]] = E[i]-E₀
+    M = rayleighquotient(fact)
+    if length(fact)<length(dimensions)
+        Q = Q[:, 1:length(fact)]
+        dimensions = dimensions[1:length(fact)]
+    elseif length(fact)>length(dimensions)
+        M = M[1:length(dimensions), 1:length(dimensions)]
+    end
+    E, U = eigen(Hermitian(M))
+    if kind == :greater
+        gf.Q[ranks, dimensions] = Q * U
+        broadcast!(-, view(gf.E, dimensions), E, E₀)
+    else
+        gf.Q[ranks, dimensions] = conj!(Q*U)
+        broadcast!(-, view(gf.E, dimensions), E₀, E)
     end
     return gf
 end
 
 """
     GreenFunction(
-        operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool=false;
-        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, kwargs...
+        operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::Symbol=:greater;
+        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, tol::Real=1e-12, kwargs...
     )
     GreenFunction(
-        operators::AbstractVector{<:QuantumOperator}, ed::ED, sign::Bool=false;
-        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, timer::TimerOutput=edtimer, kwargs...
+        operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::Symbol=:greater;
+        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, tol::Real=1e-12, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct a `GreenFunction`.
 """
 @inline function GreenFunction(
-        operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool=false;
-        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, kwargs...
+        operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::Symbol=:greater;
+        E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, tol::Real=1e-12, kwargs...
     )
-    return GreenFunction(operators, ed.frontend, sign; E₀, Ω, sector₀, maxdim, timer=ed.timer, kwargs...)
+    return GreenFunction(operators, ed.frontend, kind; E₀, Ω, sector₀, maxdim, tol, timer=ed.timer, kwargs...)
 end
 function GreenFunction(
-    operators::AbstractVector{<:QuantumOperator}, ed::ED, sign::Bool=false;
-    E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, timer::TimerOutput=edtimer, kwargs...
+    operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::Symbol=:greater;
+    E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, maxdim::Integer=200, tol::Real=1e-12, timer::TimerOutput=edtimer, kwargs...
 )
     if any(isnothing, (E₀, Ω, sector₀))
         eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
@@ -163,18 +165,19 @@ function GreenFunction(
         end
     end
     total_dim = sum(sector->min(maxdim, dimension(sector)), keys(groups))
-    result = GreenFunction(zeros(scalartype(Ω), length(operators), total_dim), zeros(real(scalartype(Ω)), total_dim), sign)
+    result = GreenFunction(zeros(scalartype(Ω), length(operators), total_dim), zeros(real(scalartype(Ω)), total_dim))
     offset = 0
     for (sector, ranks) in pairs(groups)
-        local_dim = dimension(sector)
+        local_dim = min(maxdim, dimension(sector))
         if local_dim>0
             m = if (sector, sector) ∈ ed.matrixization.brakets
-                value(only(matrix(ed, sector)))
+                matrix(ed, sector)
             else
                 EDMatrixization{scalartype(Ω)}(ed.matrixization.table, sector)(expand(ed.system))
             end
             V = [matrix(operators[index], (sector, sector₀), ed.matrixization.table)*Ω for index in ranks]
-            reset!(result, m, V, E₀; ranks=ranks, dimensions=(offset+1):(offset+local_dim))
+            reset!(result, value(only(m)), V, E₀, kind; ranks=ranks, dimensions=(offset+1):(offset+local_dim), tol=tol)
+            offset += local_dim
         end
     end
     return result
@@ -190,8 +193,6 @@ struct RetardedGreenFunction{T<:Number, V<:Real} <: AbstractGreenFunction{T}
     lesser::GreenFunction{T, V}
     sign::Bool
     function RetardedGreenFunction(greater::GreenFunction{T, V}, lesser::GreenFunction{T, V}, sign::Bool) where {T<:Number, V<:Real}
-        @assert ~greater.sign "RetardedGreenFunction error: for greater Green's function, its `sign` must be `false`."
-        @assert lesser.sign "RetardedGreenFunction error: for lesser Green's function, its `sign` must be `true`."
         @assert rank(greater)==rank(greater) "RetardedGreenFunction error: mismatched ranks of greater ($(rank(greater))) and lesser ($(rank(lesser))) Green's functions."
         new{T, V}(greater, lesser, sign)
     end
@@ -205,29 +206,29 @@ Get the rank of a `RetardedGreenFunction`.
 @inline rank(gf::RetardedGreenFunction) = rank(gf.greater)
 
 """
-    (gf::RetardedGreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false) -> typeof(dest)
+    (gf::RetardedGreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number) -> typeof(dest)
 
 Get the values of a `RetardedGreenFunction` at `ω` and add the result to `dest`.
 """
-function (gf::RetardedGreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false)
-    gf.greater(dest, ω; sign=sign)
-    gf.lesser(dest, ω; sign=xor(sign, gf.sign))
+function (gf::RetardedGreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number)
+    gf.greater(dest, ω)
+    gf.lesser(dest, ω; sign=gf.sign)
     return dest
 end
 
 """
-    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool; maxdim::Integer=200, kwargs...)
-    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, sign; maxdim::Integer=200, timer::TimerOutput=edtimer, kwargs...)
+    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool=false; maxdim::Integer=200, tol::Real=1e-12, kwargs...)
+    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, sign::Bool=false; maxdim::Integer=200, tol::Real=1e-12, timer::TimerOutput=edtimer, kwargs...)
 
 Construct a `RetardedGreenFunction`.
 """
-@inline function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool; maxdim::Integer=200, kwargs...)
-    return RetardedGreenFunction(operators, ed.frontend, sign; maxdim=maxdim, timer=ed.timer, kwargs...)
+@inline function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, sign::Bool=false; maxdim::Integer=200, tol::Real=1e-12, kwargs...)
+    return RetardedGreenFunction(operators, ed.frontend, sign; maxdim=maxdim, tol=tol, timer=ed.timer, kwargs...)
 end
-function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, sign; maxdim::Integer=200, timer::TimerOutput=edtimer, kwargs...)
+function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, sign::Bool=false; maxdim::Integer=200, tol::Real=1e-12, timer::TimerOutput=edtimer, kwargs...)
     eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
     E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
-    greater = GreenFunction(operators, ed, false; E₀, Ω, sector₀, maxdim, timer)
-    lesser = GreenFunction(map(adjoint, operators), ed, true; E₀, Ω, sector₀, maxdim, timer)
+    greater = GreenFunction(operators, ed, :greater; E₀, Ω, sector₀, maxdim, tol, timer)
+    lesser = GreenFunction(map(adjoint, operators), ed, :lesser; E₀, Ω, sector₀, maxdim, tol, timer)
     return RetardedGreenFunction(greater, lesser, sign)
 end

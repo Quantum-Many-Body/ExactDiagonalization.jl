@@ -62,7 +62,14 @@ Construct a set of sectors based on the quantum numbers and a Hilbert space.
 end
 
 """
-    matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{V, Int}
+    matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int) -> SparseMatrixCSC{dtype, Int}
+
+Get the CSC-formed sparse matrix representation of an operator index.
+"""
+@inline matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int) = matrix(Operator(1, op), braket, table, dtype)
+
+"""
+    matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
 Get the CSC-formed sparse matrix representation of a scalar operator.
 """
