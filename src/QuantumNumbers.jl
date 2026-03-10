@@ -834,6 +834,20 @@ end
 end
 
 """
+    (index::SpinIndex)(quantumnumber::ℤ₁) -> ℤ₁
+    (index::SpinIndex)(quantumnumber::𝕊ᶻ) -> 𝕊ᶻ
+
+Get the resulting Abelian quantum number after a `SpinIndex` acts upon an initial Abelian quantum number.
+"""
+@inline (::SpinIndex)(quantumnumber::ℤ₁) = quantumnumber
+@inline function (index::SpinIndex)(quantumnumber::𝕊ᶻ)
+    index.tag=='z' && return quantumnumber
+    index.tag=='+' && return 𝕊ᶻ(value(quantumnumber)+1)
+    index.tag=='-' && return 𝕊ᶻ(value(quantumnumber)-1)
+    error("A definite quantum number cannot be obtained.")
+end
+
+"""
     (index::Index)(quantumnumber::Abelian) -> Abelian
 
 Get the resulting Abelian quantum number after an `Index` acts upon an initial Abelian quantum number.

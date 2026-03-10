@@ -16,7 +16,7 @@ using QuantumLattices
         site, fock = pair
         return [Index(site, fock[i]) for i=1:length(fock)÷2]
     end
-    g = RetardedGreenFunction(operators, ed; maxdim=100)
+    g = RetardedGreenFunction(operators, ed, BandLanczosMethod(maxdim=100); sign=false)
 
     emin = -10.0
     emax = 10.0

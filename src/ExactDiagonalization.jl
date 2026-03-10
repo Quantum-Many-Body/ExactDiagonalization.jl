@@ -46,6 +46,7 @@ export partition
 ## GreenFunctions
 include("GreenFunctions.jl")
 export GreenFunction, RetardedGreenFunction
+export GreenFunctionMethod, BandLanczosMethod, ExactMethod
 
 ## Assignments
 include("Assignments.jl")

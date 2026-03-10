@@ -43,11 +43,11 @@ struct BandLanczosIterator{F, T, S<:Real} <: KrylovIterator{F, T}
 end
 
 """
-    BandLanczosIterator(operator, x₀::Block, maxdim::Int, tol::Real=1e-12; keepvecs::Bool=true)
+    BandLanczosIterator(operator, x₀::Block, maxdim::Int, tol::Real=1e-10; keepvecs::Bool=true)
 
 Construct a `BandLanczosIterator`.
 """
-function BandLanczosIterator(operator, x₀::Block{T}, maxdim::Int, tol::Real=1e-12; keepvecs::Bool=true) where T
+function BandLanczosIterator(operator, x₀::Block{T}, maxdim::Int, tol::Real=1e-1; keepvecs::Bool=true) where T
     norm(x₀)<tol && @error "BandLanczosIterator error: initial vector should not have norm zero"
     return BandLanczosIterator{typeof(operator), T, typeof(tol)}(operator, x₀, maxdim, tol, keepvecs)
 end
