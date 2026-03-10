@@ -110,46 +110,41 @@ Reset (a block) of `GreenFunction`.
 
 Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref).
 """
-function reset!(
-    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, kind::Symbol, method::BandLanczosMethod=BandLanczosMethod();
-    ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
-)
+@inline function reset!(gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, kind::Symbol, method::GreenFunctionMethod=BandLanczosMethod(); ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf))
     @assert allequal(size(H)) "reset! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
     @assert length(ranks)==length(V) "reset! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
     @assert kind∈(:greater, :lesser) "reset! error: kind must be either `:greater` or `lesser`."
     fill!(view(gf.Q, ranks, dimensions), 0)
     fill!(view(gf.E, dimensions), 0)
-    Q = zeros(eltype(gf), length(V), length(dimensions))
+    Q, E, U, dimensions = qeu(H, V, dimensions, method)
+    if kind == :greater
+        gf.Q[ranks, dimensions] = Q * U
+        broadcast!(-, view(gf.E, dimensions), E, E₀)
+    else
+        gf.Q[ranks, dimensions] = conj!(Q*U)
+        broadcast!(-, view(gf.E, dimensions), E₀, E)
+    end
+    return gf
+end
+@inline function qeu(H, V, dimensions, method::BandLanczosMethod)
+    Q = zeros(ComplexF64, length(V), length(dimensions))
     iter = BandLanczosIterator(H, Block(deepcopy(V)), length(dimensions)+length(V), method.tol; keepvecs=method.keepvecs)
     fact = initialize(iter)
-    if method.keepvecs
-        while length(fact)<length(dimensions) && normres(fact)>iter.tol
-            expand!(iter, fact)
-        end
-        for (i, b) in enumerate(fact.V)
+    offset = 0
+    while true
+        for (i, b) in enumerate(method.keepvecs ? fact.V[offset+1:end] : fact.V)
+            i += offset
             if i <= length(dimensions)
                 for (j, v) in enumerate(V)
                     Q[j, i] = dot(v, b)
                 end
             end
         end
-    else
-        offset = 0
-        while true
-            for (i, b) in enumerate(fact.V)
-                i += offset
-                if i <= length(dimensions)
-                    for (j, v) in enumerate(V)
-                        Q[j, i] = dot(v, b)
-                    end
-                end
-            end
-            if length(fact)<length(dimensions) && normres(fact)>iter.tol
-                offset = length(fact)
-                expand!(iter, fact)
-            else
-                break
-            end
+        if length(fact)<length(dimensions) && normres(fact)>iter.tol
+            offset = length(fact)
+            expand!(iter, fact)
+        else
+            break
         end
     end
     M = rayleighquotient(fact)
@@ -160,39 +155,16 @@ function reset!(
         M = M[1:length(dimensions), 1:length(dimensions)]
     end
     E, U = eigen(Hermitian(M))
-    if kind == :greater
-        gf.Q[ranks, dimensions] = Q * U
-        broadcast!(-, view(gf.E, dimensions), E, E₀)
-    else
-        gf.Q[ranks, dimensions] = conj!(Q*U)
-        broadcast!(-, view(gf.E, dimensions), E₀, E)
-    end
-    return gf
+    return Q, E, U, dimensions
 end
-function reset!(
-    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, kind::Symbol, method::ExactMethod;
-    ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
-)
-    @assert allequal(size(H)) "reset! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
-    @assert length(ranks)==length(V) "reset! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
-    @assert kind∈(:greater, :lesser) "reset! error: kind must be either `:greater` or `lesser`."
-    @assert size(H)==(length(dimensions), length(dimensions)) "reset! error: mismatched dimensions."
-    fill!(view(gf.Q, ranks, dimensions), 0)
-    fill!(view(gf.E, dimensions), 0)
+@inline function qeu(H, V, dimensions, method::ExactMethod)
     E, U = eigen(Hermitian(collect(H)))
-    Q = zeros(eltype(gf), length(V), length(dimensions))
+    Q = zeros(ComplexF64, length(V), length(dimensions))
     for (i, v) in enumerate(V)
         Q[i, :] = v
         conj!(view(Q, i, :))
     end
-    if kind == :greater
-        gf.Q[ranks, dimensions] = Q * U
-        broadcast!(-, view(gf.E, dimensions), E, E₀)
-    else
-        gf.Q[ranks, dimensions] = conj!(Q*U)
-        broadcast!(-, view(gf.E, dimensions), E₀, E)
-    end
-    return gf
+    return Q, E, U, dimensions
 end
 
 """
