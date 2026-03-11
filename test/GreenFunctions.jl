@@ -154,7 +154,7 @@ end
     lattice = Lattice(unitcell, (20,), ('P',))
     hilbert = Hilbert(Spin{1//2}(), length(lattice))
     J = Heisenberg(:J, 1.0, 1)
-    ed = Algorithm(:ED, ED(lattice, hilbert, J))
+    ed = Algorithm(:ED, ED(lattice, hilbert, J, 𝕊ᶻ(0)))
     operators = [𝕊{1//2}(i, '+') for i in eachindex(lattice)]
     g = GreenFunction(operators, ed, BandLanczosMethod(; keepvecs=true))
 
