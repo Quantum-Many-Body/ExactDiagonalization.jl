@@ -12,9 +12,14 @@ LuxurySparse = "d05aeea4-b7d4-55ac-b691-9e7fabb07ba2"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 QuantumLattices = "78ae1a1f-1d5d-5174-b61c-66e31b2346dc"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
+
+[weakdeps]
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+
+[extensions]
+ExactDiagonalizationPlotsExt = ["RecipesBase"]
 
 [compat]
 DataStructures = "0.18 - 0.19"
@@ -23,7 +28,7 @@ KrylovKit = "0.10"
 LinearAlgebra = "1.10 - 1"
 LuxurySparse = "0.8"
 Printf = "1.9 - 1"
-QuantumLattices = "0.14"
+QuantumLattices = "0.14.2"
 Random = "1.10 - 1"
 RecipesBase = "1.2 - 1"
 SparseArrays = "1.10 - 1"

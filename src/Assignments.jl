@@ -249,11 +249,3 @@ function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStatePro
     end
     return SpinCoherentStateProjectionData(projection.action.polars, projection.action.azimuths, result)
 end
-@recipe function plot(projection::Assignment{<:SpinCoherentStateProjection})
-    title --> str(projection)
-    titlefontsize --> 10
-    seriestype := :heatmap
-    xlabel --> "θ/π"
-    ylabel --> "φ/π"
-    projection.data.polars/pi, projection.data.azimuths/pi, projection.data.values
-end

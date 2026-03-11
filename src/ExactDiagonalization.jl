@@ -16,7 +16,6 @@ using Printf: @printf
 using QuantumLattices: eager, efficientoperations, plain, azimuth, bonds, decompose, expand, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, shape, statistics, str, totalspin
 using QuantumLattices: 𝕊, AbstractLattice, Action, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeDict, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Frontend, Generator, Hilbert, Index, Internal, InternalIndex, LinearTransformation, Matrixization, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorIndex, OperatorIndexToTuple, OperatorPack, OperatorProd, Operators, OperatorSet, OperatorSum, QuantumOperator, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceEnumerative
 using Random: seed!
-using RecipesBase: RecipesBase, @recipe
 using SparseArrays: SparseMatrixCSC, nnz, nonzeros, nzrange, rowvals, sparse, spzeros
 using TimerOutputs: TimerOutput, @timeit
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator
