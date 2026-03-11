@@ -1,5 +1,5 @@
 using ExactDiagonalization
-using LinearAlgebra: tr
+using LinearAlgebra: dot, tr
 using Plots: plot, savefig
 using QuantumLattices
 
@@ -109,28 +109,71 @@ end
     end
 end
 
-@testset "GreenFunction DOS calculation" begin
-    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
-    lattice = Lattice(unitcell, (2, 5))
+@testset "GreenFunction Hubbard" begin
+    unitcell = Lattice([0.0]; vectors=[[1.0]])
+    lattice = Lattice(unitcell, (10,), ('P',))
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
     t = Hopping(:t, -1.0, 1)
     U = Hubbard(:U, 8.0)
     μ = Onsite(:μ, -U.value/2)
-    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, (t, U, μ), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    ed = Algorithm(:ED, ED(lattice, hilbert, (t, U, μ), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     operators = mapreduce(vcat, hilbert) do pair
         site, fock = pair
         return [Index(site, fock[i]) for i=1:length(fock)÷2]
     end
-    g = RetardedGreenFunction(operators, ed, BandLanczosMethod(maxdim=100); sign=false)
+    g = RetardedGreenFunction(operators, ed, BandLanczosMethod(; keepvecs=true))
 
     emin = -10.0
     emax = 10.0
     N = 501
-    η = 0.05
+    η = 0.1
     es = LinRange(emin, emax, N)
+
     dos = zeros(N)
     for (i, e) in enumerate(es)
         dos[i] = -2imag(tr(g(e+η*1im)))
     end
-    savefig(plot(es, dos; minorticks=true, minorgrid=true), "Hubbard-Square-2x5-DOS.png")
+    savefig(plot(es, dos; minorticks=true, minorgrid=true), "Hubbard-1d-10-DOS.png")
+
+    path = ReciprocalPath(reciprocals(unitcell), line"X₂-X₁"; length=length(lattice))
+    spectral = zeros(N, length(path))
+    for (i, e) in enumerate(es)
+        data = g(e+η*1im)
+        for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
+            disp = lattice[opₘ.site] - lattice[opₙ.site]
+            for (j, momentum) in enumerate(path)
+                spectral[i, j] += -2*imag(data[m, n]*exp(1im*dot(disp, momentum)))
+            end
+        end
+    end
+    savefig(plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Hubbard-1d-10-spectral.png")
+end
+
+@testset "GreenFunction Heisenberg" begin
+    unitcell = Lattice([0.0]; vectors=[[1.0]])
+    lattice = Lattice(unitcell, (20,), ('P',))
+    hilbert = Hilbert(Spin{1//2}(), length(lattice))
+    J = Heisenberg(:J, 1.0, 1)
+    ed = Algorithm(:ED, ED(lattice, hilbert, J))
+    operators = [𝕊{1//2}(i, '+') for i in eachindex(lattice)]
+    g = GreenFunction(operators, ed, BandLanczosMethod(; keepvecs=true))
+
+    emin = 0.0
+    emax = 4.0
+    N = 401
+    η = 0.1
+    es = LinRange(emin, emax, N)
+    path = ReciprocalPath(reciprocals(unitcell), line"Γ₁-Γ₂"; length=length(lattice))
+    spectral = zeros(N, length(path))
+
+    for (i, e) in enumerate(es)
+        data = g(e+η*1im)
+        for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
+            disp = lattice[opₘ.site] - lattice[opₙ.site]
+            for (j, momentum) in enumerate(path)
+                spectral[i, j] += -2*imag(data[m, n]*exp(1im*dot(disp, momentum)))
+            end
+        end
+    end
+    savefig(plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Heisenberg-1d-20-spectral.png")
 end
