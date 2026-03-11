@@ -816,22 +816,12 @@ end
     (index::FockIndex)(quantumnumber::ℤ₁) -> ℤ₁
     (index::FockIndex)(quantumnumber::ℕ) -> ℕ
     (index::FockIndex)(quantumnumber::𝕊ᶻ) -> 𝕊ᶻ
-    (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ)) -> ℕ ⊠ 𝕊ᶻ
-    (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ)) -> 𝕊ᶻ ⊠ ℕ
 
 Get the resulting Abelian quantum number after a `FockIndex` acts upon an initial Abelian quantum number.
 """
 @inline (::FockIndex)(quantumnumber::ℤ₁) = quantumnumber
 @inline (index::FockIndex)(quantumnumber::ℕ) = index.nambu==2 ? ℕ(value(quantumnumber)+1) : ℕ(value(quantumnumber)-1)
 @inline (index::FockIndex)(quantumnumber::𝕊ᶻ) = index.nambu==2 ? 𝕊ᶻ(value(quantumnumber)+index.spin) : 𝕊ᶻ(value(quantumnumber)-index.spin)
-@inline function (index::FockIndex)(quantumnumber::(ℕ ⊠ 𝕊ᶻ))
-    n, m = values(quantumnumber)
-    return index.nambu==2 ? (ℕ ⊠ 𝕊ᶻ)(n+1, m+index.spin) : (ℕ ⊠ 𝕊ᶻ)(n-1, m-index.spin)
-end
-@inline function (index::FockIndex)(quantumnumber::(𝕊ᶻ ⊠ ℕ))
-    m, n = values(quantumnumber)
-    return index.nambu==2 ? (𝕊ᶻ ⊠ ℕ)(m+index.spin, n+1) : (𝕊ᶻ ⊠ ℕ)(m-index.spin, n-1)
-end
 
 """
     (index::SpinIndex)(quantumnumber::ℤ₁) -> ℤ₁
@@ -845,6 +835,15 @@ Get the resulting Abelian quantum number after a `SpinIndex` acts upon an initia
     index.tag=='+' && return 𝕊ᶻ(value(quantumnumber)+1)
     index.tag=='-' && return 𝕊ᶻ(value(quantumnumber)-1)
     error("A definite quantum number cannot be obtained.")
+end
+
+"""
+    (index::InternalIndex)(quantumnumber::AbelianQuantumNumberProd) -> AbelianQuantumNumberProd
+
+Get the resulting Deligne tensor product of Abelian quantum numbers after an `InternalIndex` acts upon each component of an `AbelianQuantumNumberProd`.
+"""
+@inline function (index::InternalIndex)(quantumnumber::AbelianQuantumNumberProd)
+    return ⊠(map(component -> index(component), quantumnumber.contents)...)
 end
 
 """
