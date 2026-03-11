@@ -131,6 +131,7 @@ end
     iter = BandLanczosIterator(H, Block(deepcopy(V)), length(dimensions)+length(V), method.tol; keepvecs=method.keepvecs)
     fact = initialize(iter)
     offset = 0
+    total_dim = length(dimensions)
     while true
         for (i, b) in enumerate(method.keepvecs ? fact.V[offset+1:end] : fact.V)
             i += offset
@@ -142,6 +143,9 @@ end
         end
         if length(fact)<length(dimensions) && normres(fact)>iter.tol
             offset = length(fact)
+            progress = offset / total_dim * 100
+            print(Base.stdout, "\rreset! $(round(progress, digits=1))% ($offset/$total_dim) complete.")
+            flush(Base.stdout)
             expand!(iter, fact)
         else
             break
@@ -157,7 +161,7 @@ end
     E, U = eigen(Hermitian(M))
     return Q, E, U, dimensions
 end
-@inline function qeu(H, V, dimensions, method::ExactMethod)
+@inline function qeu(H, V, dimensions, ::ExactMethod)
     E, U = eigen(Hermitian(collect(H)))
     Q = zeros(ComplexF64, length(V), length(dimensions))
     for (i, v) in enumerate(V)
@@ -189,39 +193,57 @@ function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod();
     kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
-    if any(isnothing, (E₀, Ω, sector₀))
-        eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-        E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
-    end
-    maxdim = method isa BandLanczosMethod ? method.maxdim : typemax(Int)
-    qn₀ = Abelian(sector₀)
-    groups = Dict{typeof(sector₀), Vector{Int}}()
-    for (i, operator) in enumerate(operators)
-        sector = Sector(operator(qn₀), ed.system.hilbert; table=ed.matrixization.table)
-        if haskey(groups, sector)
-            push!(groups[sector], i)
-        else
-            groups[sector] = [i]
+    @timeit timer string(kind) begin
+        @info "GreenFunction($(string(kind))) construction starts."
+        if any(isnothing, (E₀, Ω, sector₀))
+            eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
+            @info "eigen complete."
+            E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
-    end
-    total_dim = sum(sector->min(maxdim, dimension(sector)), keys(groups))
-    result = GreenFunction(zeros(scalartype(Ω), length(operators), total_dim), zeros(real(scalartype(Ω)), total_dim))
-    offset = 0
-    for (sector, ranks) in pairs(groups)
-        local_dim = min(maxdim, dimension(sector))
-        if local_dim>0
-            m = if (sector, sector) ∈ ed.matrixization.brakets
-                matrix(ed, sector)
+        maxdim = method isa BandLanczosMethod ? method.maxdim : typemax(Int)
+        qn₀ = Abelian(sector₀)
+        groups = Dict{typeof(sector₀), Vector{Int}}()
+        for (i, operator) in enumerate(operators)
+            sector = Sector(operator(qn₀), ed.system.hilbert; table=ed.matrixization.table)
+            if haskey(groups, sector)
+                push!(groups[sector], i)
             else
-                EDMatrixization{scalartype(Ω)}(ed.matrixization.table, sector)(expand(ed.system))
+                groups[sector] = [i]
             end
-            T = promote_type(scalartype(operators), scalartype(ed))
-            V = [matrix(operators[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
-            reset!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
-            offset += local_dim
         end
+        total_dim = sum(sector->min(maxdim, dimension(sector)), keys(groups))
+        result = GreenFunction(zeros(scalartype(Ω), length(operators), total_dim), zeros(real(scalartype(Ω)), total_dim))
+        offset = 0
+        for (i, (sector, ranks)) in enumerate(pairs(groups))
+            local_dim = min(maxdim, dimension(sector))
+            @info "($i/$(length(groups))) sector $(Abelian(sector)) starts."
+            if local_dim > 0
+                @timeit timer string(Abelian(sector)) begin
+                    m = if (sector, sector) ∈ ed.matrixization.brakets
+                        matrix(ed, sector; timer)
+                    else
+                        @timeit timer "matrix" begin
+                            m = EDMatrixization{scalartype(Ω)}(ed.matrixization.table, sector)(expand(ed.system))
+                        end
+                    end
+                    @info "($i/$(length(groups))) matrix complete."
+                    T = promote_type(scalartype(operators), scalartype(ed))
+                    @timeit timer "initial states" begin
+                        V = [matrix(operators[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
+                    end
+                    @info "($i/$(length(groups))) initial states complete."
+                    @timeit timer "reset!" begin
+                        reset!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
+                    end
+                    @info "($i/$(length(groups))) reset! complete."
+                    offset += local_dim
+                end
+            end
+            @info "($i/$(length(groups))) sector $(Abelian(sector)) complete."
+        end
+        @info "GreenFunction($(string(kind))) construction complete."
+        return result
     end
-    return result
 end
 
 """
@@ -267,9 +289,14 @@ Construct a `RetardedGreenFunction`.
     return RetardedGreenFunction(operators, ed.frontend, method; sign=sign, timer=ed.timer, kwargs...)
 end
 function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, timer::TimerOutput=edtimer, kwargs...)
-    eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-    E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
-    greater = GreenFunction(operators, ed, method; kind=:greater, E₀, Ω, sector₀, timer)
-    lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, E₀, Ω, sector₀, timer)
-    return RetardedGreenFunction(greater, lesser, sign)
+    @timeit timer "RetardedGreenFunction" begin
+        @info "RetardedGreenFunction construction starts."
+        eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
+        @info "eigen complete."
+        E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
+        greater = GreenFunction(operators, ed, method; kind=:greater, E₀, Ω, sector₀, timer)
+        lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, E₀, Ω, sector₀, timer)
+        @info "RetardedGreenFunction construction complete."
+        return RetardedGreenFunction(greater, lesser, sign)
+    end
 end
