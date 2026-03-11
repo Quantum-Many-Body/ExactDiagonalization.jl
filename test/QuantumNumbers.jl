@@ -1,6 +1,6 @@
 using Base.Iterators: product
 using ExactDiagonalization
-using QuantumLattices: 𝕔, 𝕔⁺
+using QuantumLattices: 𝕔, 𝕔⁺, 𝕊
 
 @testset "AbelianQuantumNumber" begin
     n = ℕ(1)
@@ -140,6 +140,13 @@ end
 @testset "QuantumOperator upon QuantumNumber" begin
     @test 𝕔(2, 1//2)(ℤ₁())==ℤ₁()
     @test 𝕔⁺(2, 1//2)(ℤ₁())==ℤ₁()
+
+    @test 𝕊('z')(ℤ₁())==ℤ₁()
+    @test 𝕊('+')(ℤ₁())==ℤ₁()
+    @test 𝕊('-')(ℤ₁())==ℤ₁()
+    @test 𝕊{1//2}('z')(𝕊ᶻ(1)) == 𝕊ᶻ(1)
+    @test 𝕊{1//2}('+')(𝕊ᶻ(1)) == 𝕊ᶻ(2)
+    @test 𝕊{1//2}('-')(𝕊ᶻ(1)) == 𝕊ᶻ(0)
 
     @test 𝕔(2, 1//2)(ℕ(2)) == ℕ(1)
     @test 𝕔(2, 2, 1//2)(ℕ(2)) == ℕ(1)
