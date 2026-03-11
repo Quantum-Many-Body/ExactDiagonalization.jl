@@ -3,7 +3,7 @@
 
 Abstract type of Abelian quantum numbers.
 
-An Abelian quantum number is the label of a irreducible representation of an Abelian group acted on a quantum representation space. 
+An Abelian quantum number is the label of an irreducible representation of an Abelian group acting on a quantum representation space. 
 """
 abstract type AbelianQuantumNumber end
 @inline Base.:(==)(qn₁::QN, qn₂::QN) where {QN<:AbelianQuantumNumber} = ==(efficientoperations, qn₁, qn₂)
@@ -23,7 +23,7 @@ const Abelian = AbelianQuantumNumber
 """
     getindex(::Type{Abelian}, ::Type{T}) where {T<:AbelianQuantumNumber} -> Type{T}
 
-Overloaded `[]` for `Abelian`, i.e., the support of syntax `Abelian[T]` where `T<:AbelianQuantumNumber`, which is helpful for the construction of tensor producted Abelian quantum numbers.
+Overloaded `[]` for `Abelian`, i.e., the support of syntax `Abelian[T]` where `T<:AbelianQuantumNumber`, which is helpful for the construction of tensor-product Abelian quantum numbers.
 """
 @inline Base.getindex(::Type{Abelian}, ::Type{T}) where {T<:AbelianQuantumNumber} = T
 
@@ -138,7 +138,7 @@ struct 𝕊ᶻ <: 𝕌₁
 end
 
 """
-    ℕ <: <: 𝕌₁
+    ℕ <: 𝕌₁
 
 Concrete Abelian quantum number of the particle number.
 """
@@ -326,7 +326,7 @@ abstract type RepresentationSpace{QN<:AbelianQuantumNumber} <: VectorSpace{QN} e
 """
     cumsum(rs::RepresentationSpace, i::Union{Integer, CartesianIndex}) -> Int
 
-Get the accumulative degenerate dimension up to the ith Abelian quantum number contained in a representation space.
+Get the cumulative degenerate dimension up to the ith Abelian quantum number contained in a representation space.
 """
 @inline Base.cumsum(rs::RepresentationSpace, i::Union{Integer, CartesianIndex}) = iszero(i) ? 0 : range(rs, i).stop
 
@@ -386,7 +386,7 @@ end
 """
     regularize(quantumnumbers::AbstractVector{<:AbelianQuantumNumber}, dimension::AbstractVector{<:Integer}; check::Bool=false) -> Tuple{Vector{eltype(quantumnumbers)}, Vector{Int}, Vector{Int}}
 
-Regularize of the input Abelian quantum numbers and their corresponding degenerate dimensions.
+Regularize the input Abelian quantum numbers and their corresponding degenerate dimensions.
 
 See [`regularize!`](@ref).
 """
@@ -554,7 +554,7 @@ Get the slice of the degenerate dimension of an Abelian quantum number contained
 """
     cumsum(gs::AbelianGradedSpace{QN}, qn::QN) where {QN<:AbelianQuantumNumber} -> Int
 
-Get the accumulative dimension of an Abelian graded space up to a certain Abelian quantum number contained in an Abelian graded space.
+Get the cumulative dimension of an Abelian graded space up to a certain Abelian quantum number contained in an Abelian graded space.
 """
 @inline Base.cumsum(gs::AbelianGradedSpace{QN}, qn::QN) where {QN<:AbelianQuantumNumber} = gs.contents[inv(qn, gs.dual)].stop
 

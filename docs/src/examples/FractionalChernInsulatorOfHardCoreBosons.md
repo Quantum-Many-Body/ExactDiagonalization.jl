@@ -6,7 +6,7 @@ CurrentModule = ExactDiagonalization
 
 ## Many-body energy levels as a function of twisted boundary conditions
 
-The following codes could compute the many-body energy levels as a function of twisted boundary conditions of hard-core bosons on honeycomb lattice with a nearly-flat Chern band.
+The following code can compute the many-body energy levels as a function of twisted boundary conditions of hard-core bosons on a honeycomb lattice with a nearly-flat Chern band.
 
 ```@example fci
 using QuantumLattices
@@ -28,7 +28,7 @@ hilbert = Hilbert(Fock{:b}(1, 1), length(lattice))
 
 # Parameters of the model, with hoppings up to 3rd nearest neighbor and interactions up to 2nd
 # the 2nd nearest neighbor hopping is complex, similar to that of the Haldane model
-# with such parameters, the model host a nearly flat band with ±1 Chern number
+# with such parameters, the model hosts a nearly flat band with ±1 Chern number
 parameters = (
     t=Complex(-1.0), t′=Complex(-0.6), t′′=Complex(0.58), φ=0.4, V₁=1.0, V₂=0.4, θ₁=0.0, θ₂=0.0
 )

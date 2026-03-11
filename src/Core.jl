@@ -46,7 +46,7 @@ Judge whether two sectors could be direct summed.
 """
     productable(sector₁::Sector, sector₂::Sector) -> Bool
 
-Judge whether two sectors could be direct producted.
+Judge whether two sectors can form a direct product.
 """
 @inline productable(::Sector, ::Sector) = false
 
@@ -173,7 +173,7 @@ end
         timer::TimerOutput=edtimer
     ) -> EDEigenData
 
-Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
+Solve the eigen problem by the restarted Lanczos method provided by the KrylovKit package.
 """
 @inline function eigen(
     ms::OperatorSum{<:EDMatrix};
@@ -348,7 +348,7 @@ end
     eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) -> EDEigenData
     eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) -> EDEigenData
 
-Solve the eigen problem by the restarted Lanczos method provided by the Arpack package.
+Solve the eigen problem by the restarted Lanczos method provided by the KrylovKit package.
 """
 @inline eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) = eigen(matrix(ed, sectors...; timer=timer, release=release); timer=timer, kwargs...)
 @inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, release=release, kwargs...)

@@ -6,7 +6,7 @@ CurrentModule = ExactDiagonalization
 
 ## Ground state energy
 
-The following codes could compute the ground state energy of the Fermi Hubbard model on square lattice.
+The following code can compute the ground state energy of the Fermi Hubbard model on a square lattice.
 
 ```@example hubbard
 using QuantumLattices
@@ -22,7 +22,7 @@ lattice = Lattice(unitcell, (3, 4))
 # define the Hilbert space (single-orbital spin-1/2 complex fermion)
 hilbert = Hilbert(site=>Fock{:f}(1, 2) for site=1:length(lattice))
 
-# define the quantum number of the sub-Hilbert space in which the computation to be carried out
+# define the quantum number of the sub-Hilbert space in which the computation is to be carried out
 # here the particle number is set to be `length(lattice)` and Sz is set to be 0
 quantumnumber = ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)
 

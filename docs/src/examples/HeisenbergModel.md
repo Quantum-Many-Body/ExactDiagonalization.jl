@@ -6,7 +6,7 @@ CurrentModule = ExactDiagonalization
 
 ## Ground state energy
 
-The following codes could compute the ground state energy of the antiferromagnetic Heisenberg model on square lattice.
+The following code can compute the ground state energy of the antiferromagnetic Heisenberg model on a square lattice.
 
 ```@example heisenberg
 using QuantumLattices
@@ -22,7 +22,7 @@ lattice = Lattice(unitcell, (4, 4))
 # define the Hilbert space (spin-1/2)
 hilbert = Hilbert(Spin{1//2}(), length(lattice))
 
-# define the quantum number of the sub-Hilbert space in which the computation to be carried out
+# define the quantum number of the sub-Hilbert space in which the computation is to be carried out
 # for the ground state, Sz=0
 quantumnumber = 𝕊ᶻ(0)
 

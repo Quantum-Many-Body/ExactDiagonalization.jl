@@ -13,7 +13,7 @@ Get the default partition of n local Hilbert spaces.
 A set of Abelian bases, that is, a set of bases composed from the product of local Abelian Graded spaces.
 
 To improve the efficiency of the product of local Abelian Graded spaces, we adopt a two-step strategy:
-1) partition the local spaces into several groups in each of which the local spaces are direct producted and rearranged according to the Abelian quantum numbers, and then 
+1) partition the local spaces into several groups in each of which the local spaces are combined via direct product and rearranged according to the Abelian quantum numbers, and then 
 2) glue the results obtained in the previous step so that a sector with a certain Abelian quantum number can be targeted.
 
 In principle, a binary-tree strategy can be more efficient, but our two-step strategy is enough for a quantum system that can be solved by the exact diagonalization method.
@@ -59,7 +59,7 @@ Get the Abelian quantum number of a set of spin bases.
 """
     range(bs::AbelianBases) -> AbstractVector{Int}
 
-Get the range of the target sector of an `AbelianBases` in the direct producted bases.
+Get the range of the target sector of an `AbelianBases` in the combined via direct product bases.
 """
 @inline Base.range(bs::AbelianBases{ℤ₁}) = 1:dimension(bs)
 function Base.range(bs::AbelianBases)
@@ -76,7 +76,7 @@ end
 """
     AbelianBases(locals::AbstractVector{Int}, partition::NTuple{N, AbstractVector{Int}}=partition(length(locals))) where N
 
-Construct a set of spin bases that subjects to no quantum number conservation.
+Construct a set of spin bases that subject to no quantum number conservation.
 """
 @inline function AbelianBases(locals::AbstractVector{Int}, partition::NTuple{N, AbstractVector{Int}}=partition(length(locals))) where N
     return AbelianBases(Graded{ℤ₁}[Graded{ℤ₁}(0=>dim) for dim in locals], ℤ₁(0), partition)
@@ -276,7 +276,7 @@ end
         table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))
     ) where N -> NTuple{fieldcount(typeof(quantumnumbers)), AbelianBases}
 
-Construct a set of Abelian based based on the quantum numbers and a Hilbert space.
+Construct a set of Abelian bases based on the quantum numbers and a Hilbert space.
 """
 function Base.broadcast(
     ::Type{Sector}, quantumnumbers::OneAtLeast{A}, hilbert::Hilbert{<:Spin}, partition::NTuple{N, AbstractVector{Int}}=partition(length(hilbert));

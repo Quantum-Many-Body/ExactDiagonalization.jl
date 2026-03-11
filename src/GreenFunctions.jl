@@ -80,14 +80,14 @@ Get the rank of a `GreenFunction`.
 """
     dimension(gf::GreenFunction) -> Int
 
-Get the dimension of the Krylov space expanded to obtained a `GreenFunction`.
+Get the dimension of the Krylov space expanded to obtain a `GreenFunction`.
 """
 @inline dimension(gf::GreenFunction) = size(gf.Q, 2)
 
 """
     (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false) -> typeof(dest)
 
-Get the values of a `GreenFunction` at `ω` and add the result to `dest` (when `sign` is `false`) or substrate the result from `dest` (when `sign` is `true`).
+Get the values of a `GreenFunction` at `ω` and add the result to `dest` (when `sign` is `false`) or subtract the result from `dest` (when `sign` is `true`).
 """
 function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::Bool=false)
     factor = sign ? -1 : 1
@@ -256,7 +256,7 @@ struct RetardedGreenFunction{T<:Number, V<:Real} <: AbstractGreenFunction{T}
     lesser::GreenFunction{T, V}
     sign::Bool
     function RetardedGreenFunction(greater::GreenFunction{T, V}, lesser::GreenFunction{T, V}, sign::Bool) where {T<:Number, V<:Real}
-        @assert rank(greater)==rank(greater) "RetardedGreenFunction error: mismatched ranks of greater ($(rank(greater))) and lesser ($(rank(lesser))) Green's functions."
+        @assert rank(greater)==rank(lesser) "RetardedGreenFunction error: mismatched ranks of greater ($(rank(greater))) and lesser ($(rank(lesser))) Green's functions."
         new{T, V}(greater, lesser, sign)
     end
 end

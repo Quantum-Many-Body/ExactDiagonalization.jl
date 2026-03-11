@@ -104,7 +104,7 @@ function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrel
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
     lattice = ed.frontend.lattice
     operators = correlator.action.operators
-    @assert size(operators)==(length(lattice), length(lattice)) "run! error: the size ($(join(size(operators), "x"))) of the operators doest not match the length ($(length(lattice))) of the lattice."
+    @assert size(operators)==(length(lattice), length(lattice)) "run! error: the size ($(join(size(operators), "x"))) of the operators does not match the length ($(length(lattice))) of the lattice."
     table = ed.frontend.matrixization.table
     Ω = only(eigensystem.data.vectors)
     sector = only(eigensystem.data.sectors)

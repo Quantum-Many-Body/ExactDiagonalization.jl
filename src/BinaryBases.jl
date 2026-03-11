@@ -189,7 +189,7 @@ Get the Abelian quantum number of a set of binary bases.
     BinaryBases(states)
     BinaryBases(nstate::Integer)
 
-Construct a set of binary bases that subjects to no quantum number conservation.
+Construct a set of binary bases that subject to no quantum number conservation.
 """
 function BinaryBases(nstate::Integer)
     stategroup = BinaryBasis(one(nstate):nstate)
@@ -280,7 +280,7 @@ Deligne tensor product the quantum number of a set of binary bases with another 
 Get the direct product of two sets of binary bases.
 """
 function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
-    @assert productable(bs₁, bs₂) "⊗ error: the input two sets of bases cannot be direct producted."
+    @assert productable(bs₁, bs₂) "⊗ error: the input two sets of bases cannot form a direct product."
     table = Vector{promote_type(eltype(bs₁), eltype(bs₂))}(undef, length(bs₁)*length(bs₂))
     count = 1
     for (b₁, b₂) in product(bs₁, bs₂)

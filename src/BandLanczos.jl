@@ -11,7 +11,7 @@ export basis, expand!, initialize, normres, rayleighextension, rayleighquotient,
 """
     BandLanczosFactorization{T, S<:Number, SR<:Real} <: KrylovFactorization{T, S}
 
-Band Lanczos factorization, same to [`KrylovKit.BlockLanczosFactorization`](https://jutho.github.io/KrylovKit.jl/stable/man/implementation/#KrylovKit.BlockLanczosFactorization) except that the Krylov basis vectors can be chosen to be kept or not.
+Band Lanczos factorization, the same as [`KrylovKit.BlockLanczosFactorization`](https://jutho.github.io/KrylovKit.jl/stable/man/implementation/#KrylovKit.BlockLanczosFactorization) except that the Krylov basis vectors can be chosen to be kept or not.
 """
 mutable struct BandLanczosFactorization{T, S<:Number, SR<:Real} <: KrylovFactorization{T, S}
     k::Int
@@ -78,7 +78,7 @@ end
 """
     expand!(iter::BandLanczosIterator, state::BandLanczosFactorization) -> BandLanczosFactorization
 
-Expand an `BandLanczosFactorization`.
+Expand a `BandLanczosFactorization`.
 """
 function expand!(iter::BandLanczosIterator, state::BandLanczosFactorization)
     R = residual(state)
