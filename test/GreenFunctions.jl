@@ -1,7 +1,8 @@
 using ExactDiagonalization
 using LinearAlgebra: dot, tr
-using Plots: plot, savefig
 using QuantumLattices
+import CairoMakie as Makie
+import Plots
 
 @testset "GreenFunctionMethod" begin
     method = BandLanczosMethod()
@@ -133,7 +134,8 @@ end
     for (i, e) in enumerate(es)
         dos[i] = -2imag(tr(g(e+η*1im)))
     end
-    savefig(plot(es, dos; minorticks=true, minorgrid=true), "Hubbard-1d-10-DOS.png")
+    Plots.savefig(Plots.plot(es, dos; minorticks=true, minorgrid=true), "Plots-Hubbard-1d-10-DOS.png")
+    Makie.save("Makie-Hubbard-1d-10-DOS.png", Makie.series(es, dos))
 
     path = ReciprocalPath(reciprocals(unitcell), line"X₂-X₁"; length=length(lattice))
     spectral = zeros(N, length(path))
@@ -146,7 +148,8 @@ end
             end
         end
     end
-    savefig(plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Hubbard-1d-10-spectral.png")
+    Plots.savefig(Plots.plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Plots-Hubbard-1d-10-spectral.png")
+    Makie.save("Makie-Hubbard-1d-10-spectral.png", Makie.plot(path, es, log.(1 .+ spectral)))
 end
 
 @testset "GreenFunction Heisenberg" begin
@@ -175,5 +178,6 @@ end
             end
         end
     end
-    savefig(plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Heisenberg-1d-20-spectral.png")
+    Plots.savefig(Plots.plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Plots-Heisenberg-1d-20-spectral.png")
+    Makie.save("Makie-Heisenberg-1d-20-spectral.png", Makie.plot(path, es, log.(1 .+ spectral)))
 end
