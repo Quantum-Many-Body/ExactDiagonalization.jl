@@ -135,7 +135,7 @@ end
         dos[i] = -2imag(tr(g(e+η*1im)))
     end
     Plots.savefig(Plots.plot(es, dos; minorticks=true, minorgrid=true), "Plots-Hubbard-1d-10-DOS.png")
-    Makie.save("Makie-Hubbard-1d-10-DOS.png", Makie.series(es, dos))
+    Makie.save("Makie-Hubbard-1d-10-DOS.png", Makie.lines(es, dos))
 
     path = ReciprocalPath(reciprocals(unitcell), line"X₂-X₁"; length=length(lattice))
     spectral = zeros(N, length(path))
