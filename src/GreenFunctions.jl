@@ -148,6 +148,7 @@ end
             flush(Base.stdout)
             expand!(iter, fact)
         else
+            offset>0 && println(Base.stdout)
             break
         end
     end
