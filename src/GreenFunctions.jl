@@ -203,9 +203,9 @@ function GreenFunction(
         end
         maxdim = method isa BandLanczosMethod ? method.maxdim : typemax(Int)
         qn₀ = Abelian(sector₀)
-        groups = Dict{typeof(sector₀), Vector{Int}}()
+        groups = OrderedDict{typeof(sector₀), Vector{Int}}()
         for (i, operator) in enumerate(operators)
-            sector = Sector(operator(qn₀), ed.system.hilbert; table=ed.matrixization.table)
+            sector = Sector(adjoint(operator)(qn₀), ed.system.hilbert; table=ed.matrixization.table)
             if haskey(groups, sector)
                 push!(groups[sector], i)
             else
@@ -230,7 +230,7 @@ function GreenFunction(
                     @info "($i/$(length(groups))) matrix complete."
                     T = promote_type(scalartype(operators), scalartype(ed))
                     @timeit timer "initial states" begin
-                        V = [matrix(operators[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
+                        V = [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
                     end
                     @info "($i/$(length(groups))) initial states complete."
                     @timeit timer "reset!" begin
