@@ -1,7 +1,7 @@
 name = "ExactDiagonalization"
 uuid = "52dcaa32-6da7-11e9-20ef-755843cf72eb"
 authors = ["waltergu <waltergu1989@gmail.com>"]
-version = "0.3.0"
+version = "0.3.1"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"

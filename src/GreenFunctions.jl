@@ -144,11 +144,9 @@ end
         if length(fact)<length(dimensions) && normres(fact)>iter.tol
             offset = length(fact)
             progress = offset / total_dim * 100
-            print(Base.stdout, "\rreset! $(round(progress, digits=1))% ($offset/$total_dim) complete.")
-            flush(Base.stdout)
+            @info "reset! $(round(progress, digits=1))% ($offset/$total_dim) complete."
             expand!(iter, fact)
         else
-            offset>0 && println(Base.stdout)
             break
         end
     end
