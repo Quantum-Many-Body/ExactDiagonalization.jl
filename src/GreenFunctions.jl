@@ -101,7 +101,7 @@ function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; sign::B
 end
 
 """
-    reset!(
+    set!(
         gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
         kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
     ) -> typeof(gf)
@@ -110,10 +110,10 @@ Reset (a block) of `GreenFunction`.
 
 Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref).
 """
-@inline function reset!(gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod(); kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf))
-    @assert allequal(size(H)) "reset! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
-    @assert length(ranks)==length(V) "reset! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
-    @assert kind∈(:greater, :lesser) "reset! error: kind must be either `:greater` or `lesser`."
+@inline function set!(gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod(); kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf))
+    @assert allequal(size(H)) "set! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
+    @assert length(ranks)==length(V) "set! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
+    @assert kind∈(:greater, :lesser) "set! error: kind must be either `:greater` or `lesser`."
     fill!(view(gf.Q, ranks, dimensions), 0)
     fill!(view(gf.E, dimensions), 0)
     Q, E, U, dimensions = qeu(H, V, dimensions, method)
@@ -144,7 +144,7 @@ end
         if length(fact)<length(dimensions) && normres(fact)>iter.tol
             offset = length(fact)
             progress = offset / total_dim * 100
-            @info "reset! $(round(progress, digits=1))% ($offset/$total_dim) complete."
+            @info "set! $(round(progress, digits=1))% ($offset/$total_dim) complete."
             expand!(iter, fact)
         else
             break
@@ -231,10 +231,10 @@ function GreenFunction(
                         V = [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
                     end
                     @info "($i/$(length(groups))) initial states complete."
-                    @timeit timer "reset!" begin
-                        reset!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
+                    @timeit timer "set!" begin
+                        set!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
                     end
-                    @info "($i/$(length(groups))) reset! complete."
+                    @info "($i/$(length(groups))) set! complete."
                     offset += local_dim
                 end
             end
