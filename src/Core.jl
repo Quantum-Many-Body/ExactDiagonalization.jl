@@ -271,7 +271,7 @@ struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operator
 end
 @inline kind(ed::ED) = kind(typeof(ed))
 @inline kind(::Type{<:ED{K}}) where K = K()
-@inline scalartype(::Type{<:ED{<:EDKind, <:AbstractLattice, S}}) where {S<:Generator{<:Operators}} = scalartype(S)
+@inline scalartype(::Type{<:ED{<:EDKind, <:Union{AbstractLattice, Nothing}, <:Generator{<:Operators}, <:EDMatrixization, H}}) where {H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} = scalartype(H)
 @inline scalartype(::Type{<:Algorithm{F}}) where {F<:ED} = scalartype(F)
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0

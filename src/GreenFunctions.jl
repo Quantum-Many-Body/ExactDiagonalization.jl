@@ -210,8 +210,8 @@ function GreenFunction(
                 groups[sector] = [i]
             end
         end
-        total_dim = sum(sector->min(maxdim, dimension(sector)), keys(groups))
-        result = GreenFunction(zeros(scalartype(Ω), length(operators), total_dim), zeros(real(scalartype(Ω)), total_dim))
+        total_dim = sum(sector->min(maxdim, dimension(sector)), keys(groups))::Int
+        result = GreenFunction(zeros(scalartype(ed), length(operators), total_dim), zeros(real(scalartype(ed)), total_dim))
         offset = 0
         for (i, (sector, ranks)) in enumerate(pairs(groups))
             local_dim = min(maxdim, dimension(sector))
@@ -222,7 +222,7 @@ function GreenFunction(
                         matrix(ed, sector; timer)
                     else
                         @timeit timer "matrix" begin
-                            m = EDMatrixization{scalartype(Ω)}(ed.matrixization.table, sector)(expand(ed.system))
+                            m = EDMatrixization{scalartype(ed)}(ed.matrixization.table, sector)(expand(ed.system))
                         end
                     end
                     @info "($i/$(length(groups))) matrix complete."
