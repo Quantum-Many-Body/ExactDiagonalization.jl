@@ -144,7 +144,7 @@ end
         for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
             disp = lattice[opₘ.site] - lattice[opₙ.site]
             for (j, momentum) in enumerate(path)
-                spectral[i, j] += -2*imag(data[m, n]*exp(1im*dot(disp, momentum)))
+                spectral[i, j] += -imag(data[m, n]*exp(1im*dot(disp, momentum)))
             end
         end
     end
@@ -174,7 +174,7 @@ end
         for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
             disp = lattice[opₘ.site] - lattice[opₙ.site]
             for (j, momentum) in enumerate(path)
-                spectral[i, j] += -2*imag(data[m, n]*exp(1im*dot(disp, momentum)))
+                spectral[i, j] += -imag(data[m, n]*exp(1im*dot(disp, momentum)))
             end
         end
     end
