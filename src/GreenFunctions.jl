@@ -144,7 +144,7 @@ end
         if length(fact)<length(dimensions) && normres(fact)>iter.tol
             offset = length(fact)
             progress = offset / total_dim * 100
-            @info "set! $(round(progress, digits=1))% ($offset/$total_dim)."
+            @info "set! $(round(progress, digits=1))% ($offset/$total_dim)..."
             expand!(iter, fact)
         else
             break
