@@ -1,3 +1,6 @@
+using Logging: AbstractLogger, Info, with_logger
+import Logging: handle_message, min_enabled_level, shouldlog
+
 """
     GreenFunctionMethod
 
@@ -132,22 +135,25 @@ end
     fact = initialize(iter)
     offset = 0
     total_dim = length(dimensions)
-    while true
-        for (i, b) in enumerate(method.keepvecs ? fact.V[offset+1:end] : fact.V)
-            i += offset
-            if i <= length(dimensions)
-                for (j, v) in enumerate(V)
-                    Q[j, i] = dot(v, b)
+    with_logger(RawStderrLogger()) do
+        while true
+            for (i, b) in enumerate(method.keepvecs ? fact.V[offset+1:end] : fact.V)
+                i += offset
+                if i <= length(dimensions)
+                    for (j, v) in enumerate(V)
+                        Q[j, i] = dot(v, b)
+                    end
                 end
             end
-        end
-        if length(fact)<length(dimensions) && normres(fact)>iter.tol
-            offset = length(fact)
-            progress = offset / total_dim * 100
-            @info "set! $(round(progress, digits=1))% ($offset/$total_dim)..."
-            expand!(iter, fact)
-        else
-            break
+            if length(fact)<length(dimensions) && normres(fact)>iter.tol
+                offset = length(fact)
+                progress = offset / total_dim * 100
+                @info "\r[ Info: - set! $(round(progress, digits=1))% ($offset/$total_dim)..."
+                expand!(iter, fact)
+            else
+                offset>0 && @info "\n"
+                break
+            end
         end
     end
     M = rayleighquotient(fact)
@@ -168,6 +174,13 @@ end
         conj!(view(Q, i, :))
     end
     return Q, E, U, dimensions
+end
+struct RawStderrLogger <: AbstractLogger end
+@inline min_enabled_level(::RawStderrLogger) = Info
+@inline shouldlog(::RawStderrLogger, args...) = true
+@inline function handle_message(::RawStderrLogger, level, msg, args...; kwargs...)
+    print(stderr, msg)
+    flush(stderr)
 end
 
 """
@@ -193,10 +206,10 @@ function GreenFunction(
     kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "GreenFunction($(string(kind))) construction starts."
+        @info "Green Function ($(string(kind)))"
         if any(isnothing, (E₀, Ω, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete."
+            @info "eigen complete"
             E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
         maxdim = method isa BandLanczosMethod ? method.maxdim : typemax(Int)
@@ -215,32 +228,24 @@ function GreenFunction(
         offset = 0
         for (i, (sector, ranks)) in enumerate(pairs(groups))
             local_dim = min(maxdim, dimension(sector))
-            @info "($i/$(length(groups))) sector $(Abelian(sector)) starts."
+            @info "($i/$(length(groups))) sector $(Abelian(sector))"
             if local_dim > 0
                 @timeit timer string(Abelian(sector)) begin
                     m = if (sector, sector) ∈ ed.matrixization.brakets
                         matrix(ed, sector; timer)
                     else
-                        @timeit timer "matrix" begin
-                            m = EDMatrixization{scalartype(ed)}(ed.matrixization.table, sector)(expand(ed.system))
-                        end
+                        @timeit timer "matrix" EDMatrixization{scalartype(ed)}(ed.matrixization.table, sector)(expand(ed.system))
                     end
-                    @info "($i/$(length(groups))) matrix complete."
+                    @info "- matrix complete"
                     T = promote_type(scalartype(operators), scalartype(ed))
-                    @timeit timer "initial states" begin
-                        V = [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
-                    end
-                    @info "($i/$(length(groups))) initial states complete."
-                    @timeit timer "set!" begin
-                        set!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
-                    end
-                    @info "($i/$(length(groups))) set! complete."
+                    V = @timeit timer "initial states" [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
+                    @info "- initial states complete"
+                    @timeit timer "set!" set!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
+                    @info "- set! complete"
                     offset += local_dim
                 end
             end
-            @info "($i/$(length(groups))) sector $(Abelian(sector)) complete."
         end
-        @info "GreenFunction($(string(kind))) construction complete."
         return result
     end
 end
@@ -289,13 +294,12 @@ Construct a `RetardedGreenFunction`.
 end
 function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, timer::TimerOutput=edtimer, kwargs...)
     @timeit timer "RetardedGreenFunction" begin
-        @info "RetardedGreenFunction construction starts."
+        @info "Retarded Green Function"
         eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-        @info "eigen complete."
+        @info "eigen complete"
         E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         greater = GreenFunction(operators, ed, method; kind=:greater, E₀, Ω, sector₀, timer)
         lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, E₀, Ω, sector₀, timer)
-        @info "RetardedGreenFunction construction complete."
         return RetardedGreenFunction(greater, lesser, sign)
     end
 end

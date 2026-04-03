@@ -291,7 +291,7 @@ Prepare the matrix representation.
 @inline function prepare!(ed::ED; timer::TimerOutput=edtimer)
     isempty(ed.H) && @timeit timer "prepare!" begin
         reset!(ed.H, ed.matrixization, ed.system)
-        @info "ED prepare complete."
+        @info "prepare! complete"
     end
     return ed
 end
