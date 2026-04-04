@@ -113,7 +113,10 @@ Reset (a block) of `GreenFunction`.
 
 Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref).
 """
-@inline function set!(gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod(); kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf))
+@inline function set!(
+    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
+    kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
+)
     @assert allequal(size(H)) "set! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
     @assert length(ranks)==length(V) "set! error: mismatched lengths of ranks ($(length(ranks))) and initial vectors ($(length(V)))."
     @assert kind∈(:greater, :lesser) "set! error: kind must be either `:greater` or `lesser`."
