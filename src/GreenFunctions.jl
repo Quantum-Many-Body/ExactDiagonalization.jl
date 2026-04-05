@@ -105,7 +105,7 @@ end
 
 """
     set!(
-        gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
+        gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, e₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
         kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
     ) -> typeof(gf)
 
@@ -114,7 +114,7 @@ Reset (a block) of `GreenFunction`.
 Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref).
 """
 @inline function set!(
-    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, E₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
+    gf::GreenFunction, H::AbstractMatrix{<:Number}, V::AbstractVector{<:AbstractVector{<:Number}}, e₀::Real, method::GreenFunctionMethod=BandLanczosMethod();
     kind::Symbol=:greater, ranks::AbstractVector{<:Integer}=1:rank(gf), dimensions::AbstractVector{<:Integer}=1:dimension(gf)
 )
     @assert allequal(size(H)) "set! error: input Hamiltonian ($(join(size(H), "×"))) is not a square matrix."
@@ -125,10 +125,10 @@ Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`Exa
     Q, E, U, dimensions = qeu(H, V, dimensions, method)
     if kind == :greater
         gf.Q[ranks, dimensions] = Q * U
-        broadcast!(-, view(gf.E, dimensions), E, E₀)
+        broadcast!(-, view(gf.E, dimensions), E, e₀)
     else
         gf.Q[ranks, dimensions] = conj!(Q*U)
-        broadcast!(-, view(gf.E, dimensions), E₀, E)
+        broadcast!(-, view(gf.E, dimensions), e₀, E)
     end
     return gf
 end
@@ -189,31 +189,31 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod();
-        kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...
+        kind::Symbol=:greater, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...
     )
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod();
-        kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        kind::Symbol=:greater, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct a `GreenFunction`.
 """
 @inline function GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod();
-        kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...
+        kind::Symbol=:greater, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...
     )
-    return GreenFunction(operators, ed.frontend, method; kind, E₀, Ω, sector₀, timer=ed.timer, kwargs...)
+    return GreenFunction(operators, ed.frontend, method; kind, e₀, v₀, sector₀, timer=ed.timer, kwargs...)
 end
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod();
-    kind::Symbol=:greater, E₀::Union{Real, Nothing}=nothing, Ω::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    kind::Symbol=:greater, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)))"
-        if any(isnothing, (E₀, Ω, sector₀))
+        if any(isnothing, (e₀, v₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
             @info "eigen complete"
-            E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
+            e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
         maxdim = method isa BandLanczosMethod ? method.maxdim : typemax(Int)
         qn₀ = Abelian(sector₀)
@@ -241,9 +241,9 @@ function GreenFunction(
                     end
                     @info "- matrix complete"
                     T = promote_type(scalartype(operators), scalartype(ed))
-                    V = @timeit timer "initial states" [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*Ω for index in ranks]
+                    V = @timeit timer "initial states" [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*v₀ for index in ranks]
                     @info "- initial states complete"
-                    @timeit timer "set!" set!(result, value(only(m)), V, E₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
+                    @timeit timer "set!" set!(result, value(only(m)), V, e₀, method; kind=kind, ranks=ranks, dimensions=(offset+1):(offset+local_dim))
                     @info "- set! complete"
                     offset += local_dim
                 end
@@ -300,9 +300,9 @@ function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed:
         @info "Retarded Green Function"
         eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
         @info "eigen complete"
-        E₀, Ω, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
-        greater = GreenFunction(operators, ed, method; kind=:greater, E₀, Ω, sector₀, timer)
-        lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, E₀, Ω, sector₀, timer)
+        e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
+        greater = GreenFunction(operators, ed, method; kind=:greater, e₀, v₀, sector₀, timer)
+        lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, e₀, v₀, sector₀, timer)
         return RetardedGreenFunction(greater, lesser, sign)
     end
 end

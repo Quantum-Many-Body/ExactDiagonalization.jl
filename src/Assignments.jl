@@ -67,11 +67,11 @@ function run!(ed::Algorithm{<:ED}, expectation::Assignment{<:GroundStateExpectat
     eigensystem = only(expectation.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
     table = ed.frontend.matrixization.table
-    Ω = only(eigensystem.data.vectors)
-    sector = only(eigensystem.data.sectors)
+    v₀ = only(eigensystem.data.vectors)
+    sector₀ = only(eigensystem.data.sectors)
     result = zeros(D, size(expectation.action.operators))
     for (i, operator) in enumerate(expectation.action.operators)
-        result[i] = dot(Ω, matrix(operator, (sector, sector), table), Ω)
+        result[i] = dot(v₀, matrix(operator, (sector₀, sector₀), table), v₀)
     end
     return GroundStateExpectationData(result)
 end
@@ -106,12 +106,12 @@ function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrel
     operators = correlator.action.operators
     @assert size(operators)==(length(lattice), length(lattice)) "run! error: the size ($(join(size(operators), "x"))) of the operators does not match the length ($(length(lattice))) of the lattice."
     table = ed.frontend.matrixization.table
-    Ω = only(eigensystem.data.vectors)
-    sector = only(eigensystem.data.sectors)
+    v₀ = only(eigensystem.data.vectors)
+    sector₀ = only(eigensystem.data.sectors)
     len = length(correlator.action.reciprocalspace)
     result = initialization(correlator.action.reciprocalspace)
     for index in CartesianIndices(operators)
-        factor = dot(Ω, matrix(operators[index], (sector, sector), table), Ω)
+        factor = dot(v₀, matrix(operators[index], (sector₀, sector₀), table), v₀)
         r = lattice[index[2]] - lattice[index[1]]
         for (k, momentum) in enumerate(correlator.action.reciprocalspace)
             # Note we always use e^ikr to perform the Fourier transformation, which may cause problems if the static correlator is complex.
@@ -235,8 +235,8 @@ function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStatePro
     eigensystem = only(projection.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
     table = ed.frontend.matrixization.table
-    Ω = only(eigensystem.data.vectors)
-    sector = only(eigensystem.data.sectors)
+    v₀ = only(eigensystem.data.vectors)
+    sector₀ = only(eigensystem.data.sectors)
     Ψ = empty(projection.action.configuration)
     result = zeros(Float64, length(projection.action.azimuths), length(projection.action.polars))
     for (i, θ) in enumerate(projection.action.polars)
@@ -244,7 +244,7 @@ function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStatePro
             for (site, (θ₀, ϕ₀)) in projection.action.configuration
                 Ψ[site] = (θ+θ₀, ϕ+ϕ₀)
             end
-            result[j, i] = abs2(dot(Ψ(sector, table), Ω))
+            result[j, i] = abs2(dot(Ψ(sector₀, table), v₀))
         end
     end
     return SpinCoherentStateProjectionData(projection.action.polars, projection.action.azimuths, result)
