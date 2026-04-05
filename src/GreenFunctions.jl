@@ -287,22 +287,24 @@ function (gf::RetardedGreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number)
 end
 
 """
-    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, kwargs...)
-    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, timer::TimerOutput=edtimer, kwargs...)
+    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...)
+    RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...)
 
 Construct a `RetardedGreenFunction`.
 """
-@inline function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, kwargs...)
-    return RetardedGreenFunction(operators, ed.frontend, method; sign=sign, timer=ed.timer, kwargs...)
+@inline function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, kwargs...)
+    return RetardedGreenFunction(operators, ed.frontend, method; sign=sign, e₀=e₀, v₀=v₀, sector₀=sector₀, timer=ed.timer, kwargs...)
 end
-function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, timer::TimerOutput=edtimer, kwargs...)
+function RetardedGreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::ED, method::GreenFunctionMethod=BandLanczosMethod(); sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...)
     @timeit timer "RetardedGreenFunction" begin
         @info "Retarded Green Function"
-        eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-        @info "eigen complete"
-        e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
-        greater = GreenFunction(operators, ed, method; kind=:greater, e₀, v₀, sector₀, timer)
-        lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, e₀, v₀, sector₀, timer)
+        if any(isnothing, (e₀, v₀, sector₀))
+            eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
+            @info "eigen complete"
+            e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
+        end
+        greater = GreenFunction(operators, ed, method; kind=:greater, e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer)
+        lesser = GreenFunction(map(adjoint, operators), ed, method; kind=:lesser, e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer)
         return RetardedGreenFunction(greater, lesser, sign)
     end
 end
