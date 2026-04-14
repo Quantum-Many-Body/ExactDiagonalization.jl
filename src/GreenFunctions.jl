@@ -18,7 +18,7 @@ struct BandLanczosMethod <: GreenFunctionMethod
     keepvecs::Bool
     maxdim::Int
 end
-@inline BandLanczosMethod(; tol::Real=1e-10, keepvecs::Bool=false, maxdim::Integer=200) = BandLanczosMethod(tol, keepvecs, maxdim)
+@inline BandLanczosMethod(; tol::Real=1e-10, keepvecs::Bool=true, maxdim::Integer=200) = BandLanczosMethod(tol, keepvecs, maxdim)
 
 """
     ExactMethod <: GreenFunctionMethod

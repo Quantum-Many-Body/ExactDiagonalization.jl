@@ -7,12 +7,12 @@ import Plots
 @testset "GreenFunctionMethod" begin
     method = BandLanczosMethod()
     @test method.tol == 1e-10
-    @test method.keepvecs == false
+    @test method.keepvecs == true
     @test method.maxdim == 200
 
-    method = BandLanczosMethod(tol=1e-5, keepvecs=true, maxdim=100)
+    method = BandLanczosMethod(tol=1e-5, keepvecs=false, maxdim=100)
     @test method.tol == 1e-5
-    @test method.keepvecs == true
+    @test method.keepvecs == false
     @test method.maxdim == 100
 end
 
