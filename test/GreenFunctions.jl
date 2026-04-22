@@ -1,6 +1,7 @@
 using ExactDiagonalization
-using LinearAlgebra: dot, tr
+using LinearAlgebra: I, dot, inv, tr
 using QuantumLattices
+using TightBindingApproximation
 import CairoMakie as Makie
 import Plots
 
@@ -108,6 +109,51 @@ end
         @test isapprox(G_exact, G_keep; atol=1e-6)
         @test isapprox(G_no_keep, G_keep; atol=1e-6)
     end
+end
+
+@testset "GreenFunction ED vs TBA" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
+    lattice = Lattice(unitcell, (6,))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+    t = Hopping(:t, -1.0, 1)
+    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, t, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    operators = mapreduce(vcat, hilbert) do pair
+        site, fock = pair
+        return [Index(site, fock[i]) for i=1:length(fock)÷2]
+    end
+    gf = RetardedGreenFunction(operators, ed, BandLanczosMethod(); sign=false)
+    tba = Algorithm(Symbol("1D"), TBA(lattice, hilbert, t))
+    ω = rand(ComplexF64)
+    @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=10^-10)
+end
+
+@testset "GreeFunction ED vs BdG" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
+    lattice = Lattice(unitcell, (6,))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+    t = Hopping(:t, -1.0, 1)
+    Δ = Pairing(:Δ, rand(), 1, 𝕔𝕔(:, :, :); amplitude=bond->real(exp(im*azimuth(rcoordinate(bond)))))
+    μ = Onsite(:μ, -1.2)
+    quantumnumber = ℤ₁()
+    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, (t, Δ, μ), quantumnumber))
+    operators = sort!(mapreduce(vcat, hilbert) do pair
+        site, fock = pair
+        return [Index(site, fock[i]) for i=1:length(fock)]
+    end;
+    by=OperatorIndexToTuple(:nambu, :site, :orbital, :spin)
+    )
+    gf = RetardedGreenFunction(operators, ed, BandLanczosMethod(); sign=false)
+    tba = Algorithm(Symbol("1D"), TBA(lattice, hilbert, (t, Δ, μ)))
+    ω = rand(ComplexF64)
+    @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=10^-10)
+
+    Δ = Pairing(:Δ, rand(), 0, 𝕔𝕔(:, :, real(1im*σʸ)))
+    quantumnumber = 𝕊ᶻ(0)
+    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, (t, Δ, μ), quantumnumber))
+    gf = RetardedGreenFunction(operators, ed, BandLanczosMethod(); sign=false)
+    tba = Algorithm(Symbol("1D"), TBA(lattice, hilbert, (t, Δ, μ)))
+    ω = rand(ComplexF64)
+    @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=10^-10)
 end
 
 @testset "GreenFunction Hubbard" begin

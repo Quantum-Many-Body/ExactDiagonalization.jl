@@ -388,7 +388,7 @@ function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    system = Generator(bonds(lattice, neighbors), hilbert, OneOrMore(terms), boundary, eager; half=false)
+    system = Generator(bonds(lattice, neighbors), hilbert, normalize(terms), boundary, eager; half=false)
     matrixization = EDMatrixization{dtype}(table, OneOrMore(sectors)...)
     return ED{typeof(EDKind(hilbert))}(lattice, system, matrixization)
 end
@@ -417,3 +417,15 @@ end
 )
     return ED(lattice, hilbert, terms, table, broadcast(Sector, OneOrMore(quantumnumbers), hilbert; table=table), boundary, dtype; neighbors=neighbors)
 end
+
+"""
+    normalize(term::Term) -> Term
+    normalize(terms::OneAtLeast{Term}) -> OneAtLeast{Term}
+
+Normalize the terms for exact diagonalization.
+
+For a `Pairing` term, its factor is multiplied by `1//2` because in contrast to the BdG-form convention, the exact diagonalization method does not need to symmetrize the pairing operators, so the coefficient should not be doubled.
+"""
+@inline normalize(term::Term) = term
+@inline normalize(term::Pairing) = replace(term; factor=1//2)
+@inline normalize(terms::OneAtLeast{Term}) = map(normalize, terms)

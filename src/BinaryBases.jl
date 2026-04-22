@@ -349,12 +349,17 @@ Get the index-to-tuple metric for a canonical quantum Fock lattice system.
 
 """
     Sector(hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt) -> BinaryBases
+    Sector(::ℤ₁, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
     Sector(quantumnumber::ℕ, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
     Sector(quantumnumber::Union{𝕊ᶻ, Abelian[ℕ ⊠ 𝕊ᶻ], Abelian[𝕊ᶻ ⊠ ℕ]}, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert))) -> BinaryBases
 
 Construct the binary bases of a Hilbert space with the specified quantum number.
 """
 @inline Sector(hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt) = BinaryBases(basistype(sum([length(internal)÷2 for internal in values(hilbert)])))
+@inline function Sector(::ℤ₁, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
+    states = Set{basistype}(table[Index(site, index)] for (site, internal) in hilbert for index in internal)
+    return BinaryBases(states)
+end
 @inline function Sector(quantumnumber::ℕ, hilbert::Hilbert{<:Fock}, basistype::Type{<:Unsigned}=UInt; table::AbstractDict=Table(hilbert, Metric(EDKind(hilbert), hilbert)))
     states = Set{basistype}(table[Index(site, index)] for (site, internal) in hilbert for index in internal)
     return BinaryBases(states, quantumnumber)
