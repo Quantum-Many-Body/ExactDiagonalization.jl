@@ -222,7 +222,7 @@ end
     E = EDMatrix{SparseMatrixCSC{D, Int}, S}
     return OperatorSum{E, idtype(E)}
 end
-@inline Base.valtype(::Type{R}, ::Type{M}) where {R<:EDMatrixization, M<:Operators} = valtype(R, eltype(M))
+@inline Base.valtype(::Type{R}, ::Type{M}) where {R<:EDMatrixization, M<:OperatorSet} = valtype(R, eltype(M))
 function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs...)
     result = zero(valtype(matrixization, m))
     if isa(m, Operator) || length(m)>0
@@ -249,7 +249,7 @@ Filter the target bra and ket Hilbert spaces.
 struct SectorFilter{S} <: LinearTransformation
     brakets::Set{Tuple{S, S}}
 end
-@inline Base.valtype(::Type{<:SectorFilter}, ::Type{M}) where {M<:OperatorSum{<:EDMatrix}} = M
+@inline Base.valtype(::Type{<:SectorFilter}, ::Type{M}) where {M<:OperatorSet{<:EDMatrix}} = M
 @inline (sectorfileter::SectorFilter)(m::EDMatrix) = id(m)∈sectorfileter.brakets ? m : EDMatrix(spzeros(scalartype(m), size(value(m))...), id(m))
 @inline SectorFilter(sector::Sector, sectors::Sector...) = SectorFilter(map(target->(target, target), (sector, sectors...))...)
 @inline SectorFilter(braket::NTuple{2, Sector}, brakets::NTuple{2, Sector}...) = SectorFilter(push!(Set{typeof(braket)}(), braket, brakets...))
@@ -388,7 +388,7 @@ function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    system = Generator(bonds(lattice, neighbors), hilbert, normalize(terms), boundary, eager; half=false)
+    system = Generator(bonds(lattice, neighbors), hilbert, normalize(terms), boundary; half=false)
     matrixization = EDMatrixization{dtype}(table, OneOrMore(sectors)...)
     return ED{typeof(EDKind(hilbert))}(lattice, system, matrixization)
 end

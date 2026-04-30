@@ -1,6 +1,6 @@
 name = "ExactDiagonalization"
 uuid = "52dcaa32-6da7-11e9-20ef-755843cf72eb"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["waltergu <waltergu1989@gmail.com>"]
 
 [deps]
@@ -33,7 +33,7 @@ Logging = "1.10 - 1"
 LuxurySparse = "0.8"
 Makie = "0.24"
 Printf = "1.9 - 1"
-QuantumLattices = "0.14.7"
+QuantumLattices = "0.14.8"
 Random = "1.10 - 1"
 RecipesBase = "1.2 - 1"
 SparseArrays = "1.10 - 1"
