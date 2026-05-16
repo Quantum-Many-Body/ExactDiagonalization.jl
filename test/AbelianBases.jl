@@ -10,7 +10,7 @@ using SparseArrays: SparseMatrixCSC
     bs = AbelianBases([2, 2])
     @test id(bs) == (ℤ₁(0), [Graded{ℤ₁}(0=>2), Graded{ℤ₁}(0=>2)], ([1], [2]))
     @test dimension(bs) == 4
-    @test string(bs) == "{[Graded{ℤ₁}(0=>2)₁] ⊗ [Graded{ℤ₁}(0=>2)₂]: ℤ₁(0)}"
+    @test string(bs) == "(Graded{ℤ₁}(0=>2)^[1]) ⊗ (Graded{ℤ₁}(0=>2)^[2]) => ℤ₁(0)"
     @test match(bs, bs)
     @test !sumable(bs, bs)
     @test Abelian(bs) == ℤ₁(0)
@@ -20,7 +20,7 @@ using SparseArrays: SparseMatrixCSC
     another = AbelianBases(locals, 𝕊ᶻ(0))
     @test id(another) == (𝕊ᶻ(0), locals, ([1], [2]))
     @test dimension(another) == 2
-    @test string(another) == "{[Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)₁] ⊗ [Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)₂]: 𝕊ᶻ(0)}"
+    @test string(another) == "(Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)^[1]) ⊗ (Graded{𝕊ᶻ}(-1/2=>1, 1/2=>1)^[2]) => 𝕊ᶻ(0)"
     @test match(another, AbelianBases(locals, 𝕊ᶻ(1)))
     @test sumable(another, AbelianBases(locals, 𝕊ᶻ(1)))
     @test Abelian(another) == 𝕊ᶻ(0)

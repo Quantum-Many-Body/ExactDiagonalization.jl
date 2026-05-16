@@ -28,6 +28,7 @@ abstract type Sector end
 @inline Base.hash(sector::Sector, h::UInt) = hash(id(sector), h)
 @inline Base.:(==)(sector₁::Sector, sector₂::Sector) = isequal(id(sector₁), id(sector₂))
 @inline Base.isequal(sector₁::Sector, sector₂::Sector) = isequal(id(sector₁), id(sector₂))
+@inline Base.show(io::IO, sector::Sector) = show(io, MIME"text/plain"(), sector)
 
 """
     match(sector₁::Sector, sector₂::Sector) -> Bool
@@ -102,6 +103,9 @@ end
 @inline getcontent(m::EDMatrix, ::Val{:value}) = m.matrix
 @inline getcontent(m::EDMatrix, ::Val{:id}) = (m.bra, m.ket)
 @inline Base.promote_rule(M::Type{<:EDMatrix}, N::Type{<:Number}) = reparameter(M, :value, reparameter(valtype(M), 1, promote_type(scalartype(M), N)))
+@inline showasleaf(::Type{<:EDMatrix}) = false
+@inline Base.show(io::IO, m::EDMatrix) = show(io, MIME"text/plain"(), m)
+@inline Base.show(io::IO, ::MIME"text/plain", m::EDMatrix) = showcontent(io, m)
 
 """
     EDMatrix(m::SparseMatrixCSC, sector::Sector)

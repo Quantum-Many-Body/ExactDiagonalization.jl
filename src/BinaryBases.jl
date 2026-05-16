@@ -157,10 +157,14 @@ end
 @inline Base.eltype(bs::BinaryBases) = eltype(typeof(bs))
 @inline Base.eltype(::Type{<:BinaryBases{<:Abelian, B}}) where {B<:BinaryBasis} = B
 @inline Base.iterate(bs::BinaryBases, state=1) = state>length(bs) ? nothing : (bs.table[state], state+1)
-function Base.show(io::IO, bs::BinaryBases)
-    for (i, (qn, group)) in enumerate(zip(bs.quantumnumbers, bs.stategroups))
-        @printf io "{2^[%s]: %s}" join(collect(group), " ") qn
-        i<length(bs.quantumnumbers) && @printf io "%s" " ⊗ "
+function Base.show(io::IO, ::MIME"text/plain", bs::BinaryBases)
+    if length(bs.quantumnumbers) == 1
+        @printf io "2^[%s] => %s" join(collect(bs.stategroups[1]), " ") bs.quantumnumbers[1]
+    else
+        for (i, (qn, group)) in enumerate(zip(bs.quantumnumbers, bs.stategroups))
+            @printf io "(2^[%s] => %s)" join(collect(group), " ") qn
+            i<length(bs.quantumnumbers) && @printf io "%s" " ⊗ "
+        end
     end
 end
 @inline Base.searchsortedfirst(b::BinaryBasis, bs::BinaryBases) = searchsortedfirst(bs.table, b)

@@ -49,12 +49,12 @@ end
     end
     @test eltype(bs) == eltype(typeof(bs)) == BinaryBasis{UInt}
     @test collect(bs) == map(BinaryBasis, [0, 1, 2, 3])
-    @test string(bs) == "{2^[1 2]: ℤ₁(0)}"
+    @test string(bs) == "2^[1 2] => ℤ₁(0)"
     @test Abelian(bs) == ℤ₁(0)
 
     bs = BinaryBases(4, ℕ(2))
     @test collect(bs) == map(BinaryBasis, [3, 5, 6, 9, 10, 12])
-    @test string(bs) == "{2^[1 2 3 4]: ℕ(2)}"
+    @test string(bs) == "2^[1 2 3 4] => ℕ(2)"
     for i = 1:length(bs)
         @test searchsortedfirst(bs[i], bs) == i
     end
@@ -62,7 +62,7 @@ end
 
     bs = BinaryBases(1:2, 3:4, 𝕊ᶻ(1//2))
     @test collect(bs) == map(BinaryBasis{UInt}, [0b100, 0b1000, 0b1101, 0b1110])
-    @test string(bs) == "{2^[1 2 3 4]: 𝕊ᶻ(1/2)}"
+    @test string(bs) == "2^[1 2 3 4] => 𝕊ᶻ(1/2)"
     @test Abelian(bs) == 𝕊ᶻ(1//2)
 
     bsdw = BinaryBases(1:2, ℕ(1)) ⊠ 𝕊ᶻ(-1//2)
@@ -70,7 +70,7 @@ end
     bs = bsdw ⊗ bsup
     @test bs == BinaryBases(1:2, 3:4, ℕ(2) ⊠ 𝕊ᶻ(0))
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
-    @test string(bs) == "{2^[1 2]: ℕ(1) ⊠ 𝕊ᶻ(-1/2)} ⊗ {2^[3 4]: ℕ(1) ⊠ 𝕊ᶻ(1/2)}"
+    @test string(bs) == "(2^[1 2] => ℕ(1) ⊠ 𝕊ᶻ(-1/2)) ⊗ (2^[3 4] => ℕ(1) ⊠ 𝕊ᶻ(1/2))"
     @test Abelian(bs) ==  ℕ(2) ⊠ 𝕊ᶻ(0)
 
     bsdw = 𝕊ᶻ(-1//2) ⊠ BinaryBases(1:2, ℕ(1))
@@ -78,7 +78,7 @@ end
     bs = bsdw ⊗ bsup
     @test bs == BinaryBases(1:2, 3:4, 𝕊ᶻ(0) ⊠ ℕ(2))
     @test collect(bs) == map(BinaryBasis, [5, 6, 9, 10])
-    @test string(bs) == "{2^[1 2]: 𝕊ᶻ(-1/2) ⊠ ℕ(1)} ⊗ {2^[3 4]: 𝕊ᶻ(1/2) ⊠ ℕ(1)}"
+    @test string(bs) == "(2^[1 2] => 𝕊ᶻ(-1/2) ⊠ ℕ(1)) ⊗ (2^[3 4] => 𝕊ᶻ(1/2) ⊠ ℕ(1))"
     @test Abelian(bs) ==  𝕊ᶻ(0) ⊠ ℕ(2)
 
     @test match(BinaryBases(2), BinaryBases(1:2))

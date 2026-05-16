@@ -31,15 +31,24 @@ struct AbelianBases{A<:Abelian, N} <: Sector
 end
 @inline id(bs::AbelianBases) = (bs.quantumnumber, bs.locals, bs.partition)
 @inline dimension(bs::AbelianBases) = bs.dim
-function Base.show(io::IO, bs::AbelianBases)
-    @printf io "%s" "{"
+function Base.show(io::IO, ::MIME"text/plain", bs::AbelianBases)
     for (i, positions) in enumerate(bs.partition)
-        @printf io "[%s]" join([tostr(bs.locals[position], position) for position in positions], "⊗")
+        @printf io "("
+        start = 1
+        while start <= length(positions)
+            stop = start
+            while stop < length(positions) && bs.locals[positions[stop+1]] == bs.locals[positions[start]]
+                stop += 1
+            end
+            @printf io "%s^[%s]" string(bs.locals[positions[start]]) join(positions[start:stop], " ")
+            start = stop + 1
+            start <= length(positions) && @printf io "%s" " ⊗ "
+        end
+        @printf io ")"
         i<length(bs.partition) && @printf io "%s" " ⊗ "
     end
-    @printf io ": %s}" bs.quantumnumber
+    @printf io " => %s" bs.quantumnumber
 end
-@inline tostr(internal::Graded, order::Int) = string(internal, join('₀'+d for d in reverse(digits(order))))
 function Base.match(bs₁::BS, bs₂::BS) where {BS<:AbelianBases}
     bs₁.locals==bs₂.locals || return false
     for (positions₁, positions₂) in zip(bs₁.partition, bs₂.partition)

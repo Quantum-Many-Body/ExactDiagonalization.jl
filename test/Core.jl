@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using ExactDiagonalization: SectorFilter
 using QuantumLattices: Algorithm, Fock, Heisenberg, Hilbert, Hopping, Hubbard, Lattice, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Spin, Table
-using QuantumLattices: getcontent, idtype, parameternames, 𝕔
+using QuantumLattices: getcontent, idtype, parameternames, showasleaf, 𝕔
 using SparseArrays: SparseMatrixCSC
 
 @testset "EDMatrix & EDEigenData" begin
@@ -12,6 +12,8 @@ using SparseArrays: SparseMatrixCSC
     @test getcontent(m, :value) == m.matrix
     @test scalartype(m) == scalartype(typeof(m)) == Float64
     @test promote_type(typeof(m), ComplexF64) == EDMatrix{SparseMatrixCSC{ComplexF64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
+    @test showasleaf(typeof(m)) == false
+    @test string(m) == "EDMatrix\n  matrix: 6×6 SparseArrays.SparseMatrixCSC{Float64, Int64} with 15 stored entries:\n   2.0  1.0   ⋅    ⋅    ⋅    ⋅ \n   1.0   ⋅   1.0  1.0   ⋅    ⋅ \n    ⋅   1.0  2.0   ⋅   1.0   ⋅ \n    ⋅   1.0   ⋅    ⋅   1.0   ⋅ \n    ⋅    ⋅   1.0  1.0   ⋅   1.0\n    ⋅    ⋅    ⋅    ⋅   1.0  2.0\n  bra: 2^[1 2 3 4] => ℕ(2)\n  ket: 2^[1 2 3 4] => ℕ(2)"
 
     e = -1.8557725066359907
     v = [0.1373584690371194, -0.5296230084669367, 0.274716938074239, 0.5707844108834217, -0.5296230084669369, 0.13735846903711957]
