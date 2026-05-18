@@ -19,6 +19,7 @@ struct BandLanczosMethod <: GreenFunctionMethod
     maxdim::Int
 end
 @inline BandLanczosMethod(; tol::Real=1e-10, keepvecs::Bool=true, maxdim::Integer=200) = BandLanczosMethod(tol, keepvecs, maxdim)
+Base.show(io::IO, method::BandLanczosMethod) = print(io, "BandLanczosMethod(", method.tol, ", ", method.keepvecs, ", ", method.maxdim, ")")
 
 """
     ExactMethod <: GreenFunctionMethod
@@ -26,6 +27,7 @@ end
 Exact diagonalization method for GreenFunction.
 """
 struct ExactMethod <: GreenFunctionMethod end
+Base.show(io::IO, ::ExactMethod) = print(io, "ExactMethod()")
 
 """
     AbstractGreenFunction{T<:Number} <: Function
