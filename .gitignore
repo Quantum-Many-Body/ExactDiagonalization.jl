@@ -1,14 +1,25 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.png
+*.dat
+*.dlm
+*.qld
+*.qlc
 Manifest.toml
 
 deps/deps.jl
 docs/build/
 docs/Manifest.toml
 test/*.png
+test/*.dat
+test/*.dlm
+test/*.qld
+test/*.qlc
 test/Manifest.toml
 
 .ipynb_checkpoints/
+.vscode/
+.claude/
 
 desktop.ini
