@@ -1,7 +1,7 @@
 using ExactDiagonalization
 using ExactDiagonalization: SectorFilter
 using QuantumLattices: Algorithm, Fock, Heisenberg, Hilbert, Hopping, Hubbard, Lattice, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Spin, Table
-using QuantumLattices: getcontent, idtype, parameternames, showasleaf, 𝕔
+using QuantumLattices: contenttoconfig, getcontent, idtype, parameternames, showasleaf, 𝕔
 using SparseArrays: SparseMatrixCSC
 
 @testset "EDMatrix & EDEigenData" begin
@@ -36,6 +36,7 @@ end
 
     mr = EDMatrixization{Float64}(table, sectors...)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
+    @test contenttoconfig(mr) == (table, [(id(sectors[1]), id(sectors[1])), (id(sectors[2]), id(sectors[2])), (id(sectors[3]), id(sectors[3]))])
 
     ms = mr(ops)
     mr₁ = EDMatrixization{Float64}(table, sectors[1])
@@ -63,6 +64,7 @@ end
     @test kind(ed.frontend) == kind(typeof(ed.frontend)) == EDKind(:Binary)
     @test scalartype(ed) == scalartype(ed.frontend) == scalartype(typeof(ed.frontend)) == Float64
     @test Parameters(ed) == (t=1.0, U=0.0, μ=0.0)
+    @test contenttoconfig(ed.frontend) == (ed.frontend.lattice, contenttoconfig(ed.frontend.system), contenttoconfig(ed.frontend.matrixization))
 
     vector = [0.5, -0.5, -0.5, 0.5]
     eigensystem = eigen(matrix(prepare!(ed)); nev=1)

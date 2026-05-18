@@ -236,6 +236,7 @@ function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs.
     end
     return result
 end
+@inline contenttoconfig(matrixization::EDMatrixization) = (matrixization.table, [map(id, braket) for braket in matrixization.brakets])
 
 """
     EDMatrixization{D}(table::AbstractDict, sector::S, sectors::S...) where {D<:Number, S<:Sector}
@@ -285,6 +286,7 @@ end
     return ed
 end
 @inline Parameters(ed::ED) = Parameters(ed.system)
+@inline contenttoconfig(ed::ED) = (ed.lattice, contenttoconfig(ed.system), contenttoconfig(ed.matrixization))
 
 """
     prepare!(ed::ED; timer::TimerOutput=edtimer) -> ED

@@ -21,7 +21,7 @@ using TimerOutputs: TimerOutput, @timeit
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator
 
 import LinearAlgebra: eigen
-import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, decompose, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, update!, value
+import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, update!, value
 
 ## Quantum numbers
 include("QuantumNumbers.jl")
