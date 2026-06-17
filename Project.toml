@@ -1,6 +1,6 @@
 name = "ExactDiagonalization"
 uuid = "52dcaa32-6da7-11e9-20ef-755843cf72eb"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["waltergu <waltergu1989@gmail.com>"]
 
 [deps]

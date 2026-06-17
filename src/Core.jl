@@ -360,15 +360,28 @@ Solve the eigen problem by the restarted Lanczos method provided by the KrylovKi
 @inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, release=release, kwargs...)
 
 """
-    ED(system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
-    ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
+    ED(system::OperatorGenerator, dtype::Type{<:Number}=scalartype(system))
+    ED(lattice::Union{AbstractLattice, Nothing}, system::OperatorGenerator, dtype::Type{<:Number}=scalartype(system))
+    ED(system::OperatorGenerator, quantumnumbers::OneOrMore{Abelian}, dtype::Type{<:Number}=scalartype(system))
+    ED(lattice::Union{AbstractLattice, Nothing}, system::OperatorGenerator, quantumnumbers::OneOrMore{Abelian}, dtype::Type{<:Number}=scalartype(system))
 
-Construct the exact diagonalization method for a quantum lattice system.
+Construct the exact diagonalization method from a pre-built `OperatorGenerator` with/without quantum numbers.
 """
-@inline ED(system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system)) = ED(nothing, system, table, sectors, dtype)
-@inline function ED(lattice::Union{AbstractLattice, Nothing}, system::Generator{<:Operators}, table::AbstractDict, sectors::OneOrMore{Sector}, dtype::Type{<:Number}=scalartype(system))
-    kind = typeof(EDKind(eltype(eltype(system))))
-    matrixization = EDMatrixization{dtype}(table, sectors)
+@inline ED(system::OperatorGenerator, dtype::Type{<:Number}=scalartype(system)) = ED(nothing, system, dtype)
+function ED(lattice::Union{AbstractLattice, Nothing}, system::OperatorGenerator, dtype::Type{<:Number}=scalartype(system))
+    hilbert = system.hilbert
+    kind = typeof(EDKind(hilbert))
+    table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    matrixization = EDMatrixization{dtype}(table, Sector(hilbert))
+    return ED{kind}(lattice, system, matrixization)
+end
+@inline ED(system::OperatorGenerator, quantumnumbers::OneOrMore{Abelian}, dtype::Type{<:Number}=scalartype(system)) = ED(nothing, system, quantumnumbers, dtype)
+function ED(lattice::Union{AbstractLattice, Nothing}, system::OperatorGenerator, quantumnumbers::OneOrMore{Abelian}, dtype::Type{<:Number}=scalartype(system))
+    hilbert = system.hilbert
+    kind = typeof(EDKind(hilbert))
+    table = Table(hilbert, Metric(EDKind(hilbert), hilbert))
+    sectors = broadcast(Sector, OneOrMore(quantumnumbers), hilbert; table=table)
+    matrixization = EDMatrixization{dtype}(table, sectors...)
     return ED{kind}(lattice, system, matrixization)
 end
 
@@ -378,50 +391,25 @@ end
         neighbors::Union{Int, Neighbors}=nneighbor(terms)
     )
     ED(
-        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}=Sector(hilbert; table=table), boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
+        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
         neighbors::Union{Int, Neighbors}=nneighbor(terms)
     )
 
-Construct the exact diagonalization method for a quantum lattice system.
+Construct the exact diagonalization method for a quantum lattice system with/without quantum numbers.
 """
 @inline function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    return ED(lattice, hilbert, terms, Table(hilbert, Metric(EDKind(hilbert), hilbert)), Sector(hilbert), boundary, dtype; neighbors=neighbors)
-end
-function ED(
-    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, sectors::OneOrMore{Sector}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
-    neighbors::Union{Int, Neighbors}=nneighbor(terms)
-)
     system = Generator(bonds(lattice, neighbors), hilbert, normalize(terms), boundary; half=false)
-    matrixization = EDMatrixization{dtype}(table, OneOrMore(sectors)...)
-    return ED{typeof(EDKind(hilbert))}(lattice, system, matrixization)
+    return ED(lattice, system, dtype)
 end
-
-"""
-    ED(
-        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
-        neighbors::Union{Int, Neighbors}=nneighbor(terms)
-    )
-    ED(
-        lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
-        neighbors::Union{Int, Neighbors}=nneighbor(terms)
-    )
-
-Construct the exact diagonalization method for a quantum lattice system.
-"""
 @inline function ED(
     lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
     neighbors::Union{Int, Neighbors}=nneighbor(terms)
 )
-    return ED(lattice, hilbert, terms, Table(hilbert, Metric(EDKind(hilbert), hilbert)), quantumnumbers, boundary, dtype; neighbors=neighbors)
-end
-@inline function ED(
-    lattice::AbstractLattice, hilbert::Hilbert, terms::OneOrMore{Term}, table::AbstractDict, quantumnumbers::OneOrMore{Abelian}, boundary::Boundary=plain, dtype::Type{<:Number}=valtype(terms);
-    neighbors::Union{Int, Neighbors}=nneighbor(terms)
-)
-    return ED(lattice, hilbert, terms, table, broadcast(Sector, OneOrMore(quantumnumbers), hilbert; table=table), boundary, dtype; neighbors=neighbors)
+    system = Generator(bonds(lattice, neighbors), hilbert, normalize(terms), boundary; half=false)
+    return ED(lattice, system, quantumnumbers, dtype)
 end
 
 """

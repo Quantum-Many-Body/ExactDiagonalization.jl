@@ -89,7 +89,7 @@ end
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    another = ED(ed.frontend.system, ed.frontend.matrixization.table, Sector(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0), hilbert; table=ed.frontend.matrixization.table))
+    another = ED(ed.frontend.system, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0))
     eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
@@ -108,7 +108,11 @@ end
     eigensystem = eigen(ed; nev=4)
     @test isapprox(eigensystem.values, [-9.189207065192935, -8.686937479074416, -8.686937479074407, -8.686937479074404]; atol=10^-12)
 
-    ed = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1))
-    eigensystem = eigen(ed; nev=6)
+    another = ED(lattice, hilbert, Heisenberg(:J, 1.0, 1))
+    eigensystem = eigen(another; nev=6)
+    @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
+
+    third = ED(another.system)
+    eigensystem = eigen(third; nev=6)
     @test isapprox(eigensystem.values[1:4], [-9.189207065192946, -8.686937479074421, -8.686937479074418, -8.68693747907441]; atol=10^-12)
 end
