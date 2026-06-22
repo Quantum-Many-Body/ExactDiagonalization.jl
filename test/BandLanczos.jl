@@ -1,5 +1,5 @@
 using ExactDiagonalization.BandLanczos
-using KrylovKit: Block, BlockLanczosIterator, initialize, expand!, rayleighquotient, basis, residual, rayleighextension
+using KrylovKit: Block, BlockLanczosIterator, ModifiedGramSchmidt, ModifiedGramSchmidt2, initialize, expand!, rayleighquotient, basis, residual, rayleighextension
 using LinearAlgebra: norm
 
 @testset "BandLanczosFactorization & BandLanczosIterator" begin
@@ -14,6 +14,8 @@ using LinearAlgebra: norm
     fact₁ = initialize(iter₁)
     iter₂ = BandLanczosIterator(m, Block(vs), N; keepvecs=false)
     fact₂ = initialize(iter₂)
+    iter₃ = BandLanczosIterator(m, Block(vs), N, 2e-8, 1e-8, ModifiedGramSchmidt(), ModifiedGramSchmidt2())
+    fact₃ = initialize(iter₃)
 
     niter = 5
     tol = 1e-13
@@ -23,10 +25,18 @@ using LinearAlgebra: norm
         @test isapprox(norm(iter₁.operator*V-V*rayleighquotient(fact₁)-R*rayleighextension(fact₁)'), 0.0; atol=tol)
         @test isapprox(norm(fact₀.H[1:fact₀.k, 1:fact₀.k]-rayleighquotient(fact₁)), 0.0; atol=tol)
         @test isapprox(norm(rayleighquotient(fact₁)-rayleighquotient(fact₂)), 0.0; atol=tol)
+
+        V = hcat(basis(fact₃).basis...)
+        R = hcat(residual(fact₃).vec...)
+        @test isapprox(norm(iter₃.operator*V-V*rayleighquotient(fact₃)-R*rayleighextension(fact₃)'), 0.0; atol=tol)
+        @test isapprox(norm(fact₀.H[1:fact₀.k, 1:fact₀.k]-rayleighquotient(fact₃)), 0.0; atol=tol)
+        @test isapprox(norm(rayleighquotient(fact₁)-rayleighquotient(fact₃)), 0.0; atol=tol)
+
         if i<niter
             expand!(iter₀, fact₀)
             expand!(iter₁, fact₁)
             expand!(iter₂, fact₂)
+            expand!(iter₃, fact₃)
         end
     end
 end

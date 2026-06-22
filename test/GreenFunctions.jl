@@ -1,4 +1,5 @@
 using ExactDiagonalization
+using KrylovKit: ModifiedGramSchmidt, ModifiedGramSchmidt2
 using LinearAlgebra: I, dot, inv, tr
 using QuantumLattices
 using TightBindingApproximation
@@ -7,16 +8,25 @@ import Plots
 
 @testset "GreenFunctionMethod" begin
     method = BandLanczosMethod()
-    @test string(method) == "BandLanczosMethod(1.0e-10, true, 200)"
-    @test method.tol == 1e-10
+    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
+    @test method.tol == 2e-8
+    @test method.tolᵣ == 1e-8
     @test method.keepvecs == true
     @test method.maxdim == 200
+    @test method.orthᵣ == ModifiedGramSchmidt2()
+    @test method.orthₒ == ModifiedGramSchmidt()
 
-    method = BandLanczosMethod(tol=1e-5, keepvecs=false, maxdim=100)
-    @test string(method) == "BandLanczosMethod(1.0e-5, false, 100)"
+    method = BandLanczosMethod(tol=1e-5, tolᵣ=1e-12, keepvecs=false, maxdim=100)
+    @test string(method) == "BandLanczosMethod(1.0e-5, 1.0e-12, false, 100, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
     @test method.tol == 1e-5
+    @test method.tolᵣ == 1e-12
     @test method.keepvecs == false
     @test method.maxdim == 100
+
+    method = BandLanczosMethod(ModifiedGramSchmidt(), ModifiedGramSchmidt2())
+    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt(), KrylovKit.ModifiedGramSchmidt2())"
+    @test method.orthᵣ == ModifiedGramSchmidt()
+    @test method.orthₒ == ModifiedGramSchmidt2()
 
     @test string(ExactMethod()) == "ExactMethod()"
 end

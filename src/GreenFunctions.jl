@@ -13,13 +13,37 @@ abstract type GreenFunctionMethod end
 
 Band Lanczos method for GreenFunction.
 """
-struct BandLanczosMethod <: GreenFunctionMethod
+struct BandLanczosMethod{OQ<:Orthogonalizer, OR<:Orthogonalizer} <: GreenFunctionMethod
     tol::Float64
+    tolᵣ::Float64
     keepvecs::Bool
     maxdim::Int
+    orthᵣ::OQ
+    orthₒ::OR
 end
-@inline BandLanczosMethod(; tol::Real=1e-10, keepvecs::Bool=true, maxdim::Integer=200) = BandLanczosMethod(tol, keepvecs, maxdim)
-Base.show(io::IO, method::BandLanczosMethod) = print(io, "BandLanczosMethod(", method.tol, ", ", method.keepvecs, ", ", method.maxdim, ")")
+
+"""
+    BandLanczosMethod(
+        orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
+        tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200
+    )
+
+Construct a `BandLanczosMethod` for computing the Green function.
+
+- `orthᵣ`: [`Orthogonalizer`](https://jutho.github.io/KrylovKit.jl/stable/man/algorithms/#KrylovKit.Orthogonalizer) used in `block_qr!` for rank determination of initial and residual blocks.
+- `orthₒ`: [`Orthogonalizer`](https://jutho.github.io/KrylovKit.jl/stable/man/algorithms/#KrylovKit.Orthogonalizer) used in `block_reorthogonalize!` for reorthogonalization against the Krylov basis during the Lanczos recurrence.
+- `tol`: Lanczos convergence tolerance — iteration stops when `normres < tol`.
+- `tolᵣ`: QR rank determination tolerance in `block_qr!` — a vector with norm < `tolᵣ` is considered numerically zero.
+"""
+@inline function BandLanczosMethod(
+    orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
+    tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200
+)
+    return BandLanczosMethod(tol, tolᵣ, keepvecs, maxdim, orthᵣ, orthₒ)
+end
+@inline function Base.show(io::IO, method::BandLanczosMethod)
+    print(io, "BandLanczosMethod(", method.tol, ", ", method.tolᵣ, ", ", method.keepvecs, ", ", method.maxdim, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
+end
 
 """
     ExactMethod <: GreenFunctionMethod
@@ -136,7 +160,7 @@ Here, `method` can be either an instance of [`BandLanczosMethod`](@ref) or [`Exa
 end
 @inline function qeu(H, V, dimensions, method::BandLanczosMethod)
     Q = zeros(ComplexF64, length(V), length(dimensions))
-    iter = BandLanczosIterator(H, Block(deepcopy(V)), length(dimensions)+length(V), method.tol; keepvecs=method.keepvecs)
+    iter = BandLanczosIterator(H, Block(deepcopy(V)), length(dimensions)+length(V), method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ; keepvecs=method.keepvecs)
     fact = initialize(iter)
     offset = 0
     total_dim = length(dimensions)
@@ -150,7 +174,7 @@ end
                     end
                 end
             end
-            if length(fact)<length(dimensions) && normres(fact)>2iter.tol
+            if length(fact) < length(dimensions) && normres(fact) > iter.tol
                 offset = length(fact)
                 progress = offset / total_dim * 100
                 @info "\r[ Info: - set! $(round(progress, digits=1))% ($offset/$total_dim)..."
