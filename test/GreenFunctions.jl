@@ -197,7 +197,7 @@ end
     Plots.savefig(Plots.plot(es, dos; minorticks=true, minorgrid=true), "Plots-Hubbard-1d-10-DOS.png")
     Makie.save("Makie-Hubbard-1d-10-DOS.png", Makie.lines(es, dos))
 
-    path = ReciprocalPath(reciprocals(unitcell), line"X₂-X₁"; length=length(lattice))
+    path = ReciprocalPath(unitcell, line"X₂-X₁"; length=length(lattice))
     spectral = zeros(N, length(path))
     for (i, e) in enumerate(es)
         data = g(e+η*1im)
@@ -226,7 +226,7 @@ end
     N = 401
     η = 0.1
     es = LinRange(emin, emax, N)
-    path = ReciprocalPath(reciprocals(unitcell), line"Γ₁-Γ₂"; length=length(lattice))
+    path = ReciprocalPath(unitcell, line"Γ₁-Γ₂"; length=length(lattice))
     spectral = zeros(N, length(path))
 
     for (i, e) in enumerate(es)
