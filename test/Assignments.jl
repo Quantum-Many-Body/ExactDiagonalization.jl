@@ -11,12 +11,12 @@ import Plots
     ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
     nᵢ = [𝕔⁺(i, 1, 0)*𝕔(i, 1, 0) for i = 1:length(lattice)]
-    expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem; nev=1)
+    expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem)
     nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
-    bz = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(unitcell, 100)), eigensystem; nev=1)
+    bz = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(unitcell, 100)), eigensystem)
     Plots.savefig(Plots.plot(bz), "Plots-Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png")
     Makie.save("Makie-Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png", Makie.plot(bz))
-    path = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-Path"), StaticTwoPointCorrelator(nᵢnⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
+    path = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-Path"), StaticTwoPointCorrelator(nᵢnⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem)
     Plots.savefig(Plots.plot(path), "Plots-Spinless-Square-4x4-StaticChargeStructureFactor-Path.png")
     Makie.save("Makie-Spinless-Square-4x4-StaticChargeStructureFactor-Path.png", Makie.plot(path))
 end
@@ -28,10 +28,10 @@ end
     ed = Algorithm(Symbol("Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
     SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ⁺)*𝕔⁺𝕔(:, :, σ⁻) + 1//2*𝕔⁺𝕔(:, :, σ⁻)*𝕔⁺𝕔(:, :, σ⁺) + 𝕔⁺𝕔(:, :, σᶻ)*𝕔⁺𝕔(:, :, σᶻ)), bond, hilbert) for bond in bonds(lattice, :)]
-    bz = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 100)), eigensystem; nev=1)
+    bz = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 100)), eigensystem)
     Plots.savefig(Plots.plot(bz), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
     Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png", Makie.plot(bz))
-    path = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem; nev=1)
+    path = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem)
     Plots.savefig(Plots.plot(path), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
     Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png", Makie.plot(path))
 end

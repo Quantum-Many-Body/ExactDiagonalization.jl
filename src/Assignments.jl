@@ -1,19 +1,16 @@
 """
     const basicoptions = (
-        nev = "number of eigenvalues to be computed",
-        which = "type of eigenvalues to be computed",
         tol = "tolerance of the computation",
         maxiter = "maximum iteration of the computation",
         v₀ = "initial state",
         krylovdim = "maximum dimension of the Krylov subspace that will be constructed",
-        verbosity = "verbosity level"
+        verbosity = "verbosity level",
+        release = "release or not the cache for the construction of the sparse matrix representation of the Hamiltonian"
     )
 
-Basic options of actions for exact diagonalization method.
+Basic options of computation tasks for exact diagonalization method.
 """
 const basicoptions = (
-    nev = "number of eigenvalues to be computed",
-    which = "type of eigenvalues to be computed",
     tol = "tolerance of the computation",
     maxiter = "maximum iteration of the computation",
     v₀ = "initial state",
@@ -23,34 +20,38 @@ const basicoptions = (
 )
 
 """
-    EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}} <: Action
+    EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}}
 
 Eigen system by exact diagonalization method.
 """
-struct EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}} <: Action
+struct EDEigen{S<:Tuple{Vararg{Union{Abelian, Sector}}}}
     sectors::S
+    nev::Int
+    which::Symbol
 end
 @inline options(::Type{<:Assignment{<:EDEigen}}) = basicoptions
 
 """
-    EDEigen(sectors::Union{Abelian, Sector}...)
-    EDEigen(sectors:::Tuple{Vararg{Union{Abelian, Sector}}})
+    EDEigen(sectors::Union{Abelian, Sector}...; nev::Int=1, which::Symbol=:SR)
+    EDEigen(sectors::Tuple{Vararg{Union{Abelian, Sector}}}; nev::Int=1, which::Symbol=:SR)
 
-Construct an `EDEigen`.
+Construct an `EDEigen`. `nev` is the number of eigenvalues to be computed and `which` the type of eigenvalues to be computed.
 """
-@inline EDEigen(sectors::Union{Abelian, Sector}...) = EDEigen(sectors)
-@inline run!(ed::Algorithm{<:ED}, edeigen::Assignment{<:EDEigen}; options...) = eigen(ed, edeigen.action.sectors...; options...)
+@inline EDEigen(sectors::Tuple{Vararg{Union{Abelian, Sector}}}; nev::Int=1, which::Symbol=:SR) = EDEigen(sectors, nev, which)
+@inline EDEigen(sectors::Union{Abelian, Sector}...; kwargs...) = EDEigen(sectors; kwargs...)
+@inline run!(ed::Algorithm{<:ED}, edeigen::Assignment{<:EDEigen}; options...) = eigen(ed, edeigen.task.sectors...; nev=edeigen.task.nev, which=edeigen.task.which, options...)
 
 """
-    GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}} <: Action
+    GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}}
 
 Ground state expectation of operators.
 """
-struct GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}} <: Action
+struct GroundStateExpectation{D<:Number, O<:Array{<:Union{Operator, Operators}}}
     operators::O
     GroundStateExpectation{D}(operators::Array{<:Union{Operator, Operators}}) where {D<:Number} = new{D, typeof(operators)}(operators)
 end
 @inline options(::Type{<:Assignment{<:GroundStateExpectation}}) = basicoptions
+@inline dependencytypes(::Type{<:GroundStateExpectation}) = (EDEigen,)
 @inline GroundStateExpectation(operators::Array{<:Union{Operator, Operators}}) = GroundStateExpectation{Float64}(operators)
 
 """
@@ -69,23 +70,24 @@ function run!(ed::Algorithm{<:ED}, expectation::Assignment{<:GroundStateExpectat
     table = ed.frontend.matrixization.table
     v₀ = only(eigensystem.data.vectors)
     sector₀ = only(eigensystem.data.sectors)
-    result = zeros(D, size(expectation.action.operators))
-    for (i, operator) in enumerate(expectation.action.operators)
+    result = zeros(D, size(expectation.task.operators))
+    for (i, operator) in enumerate(expectation.task.operators)
         result[i] = dot(v₀, matrix(operator, (sector₀, sector₀), table), v₀)
     end
     return GroundStateExpectationData(result)
 end
 
 """
-    StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace} <: Action
+    StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace}
 
 Static two-point correlation function.
 """
-struct StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace} <: Action
+struct StaticTwoPointCorrelator{O<:Union{Operator, Operators}, R<:ReciprocalSpace}
     operators::Matrix{O}
     reciprocalspace::R
 end
 @inline options(::Type{<:Assignment{<:StaticTwoPointCorrelator}}) = basicoptions
+@inline dependencytypes(::Type{<:StaticTwoPointCorrelator}) = (EDEigen,)
 
 """
     StaticTwoPointCorrelatorData{R<:ReciprocalSpace, V<:Array{Float64}} <: Data
@@ -103,24 +105,24 @@ function run!(ed::Algorithm{<:ED}, correlator::Assignment{<:StaticTwoPointCorrel
     eigensystem = only(correlator.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
     lattice = ed.frontend.lattice
-    operators = correlator.action.operators
+    operators = correlator.task.operators
     @assert size(operators)==(length(lattice), length(lattice)) "run! error: the size ($(join(size(operators), "x"))) of the operators does not match the length ($(length(lattice))) of the lattice."
     table = ed.frontend.matrixization.table
     v₀ = only(eigensystem.data.vectors)
     sector₀ = only(eigensystem.data.sectors)
-    len = length(correlator.action.reciprocalspace)
-    result = initialization(correlator.action.reciprocalspace)
+    len = length(correlator.task.reciprocalspace)
+    result = initialization(correlator.task.reciprocalspace)
     for index in CartesianIndices(operators)
         factor = dot(v₀, matrix(operators[index], (sector₀, sector₀), table), v₀)
         r = lattice[index[2]] - lattice[index[1]]
-        for (k, momentum) in enumerate(correlator.action.reciprocalspace)
+        for (k, momentum) in enumerate(correlator.task.reciprocalspace)
             # Note we always use e^ikr to perform the Fourier transformation, which may cause problems if the static correlator is complex.
             # However, we only consider real static correlators for now.
             phase = exp(1im*dot(momentum, r))
             result[k] += real(factor*phase)/len
         end
     end
-    return StaticTwoPointCorrelatorData(correlator.action.reciprocalspace, result)
+    return StaticTwoPointCorrelatorData(correlator.task.reciprocalspace, result)
 end
 @inline initialization(reciprocalspace::Union{BrillouinZone, ReciprocalZone}) = zeros(Float64, map(length, reverse(shape(reciprocalspace)))...)
 @inline initialization(reciprocalspace::ReciprocalSpace) = zeros(Float64, length(reciprocalspace), 1)
@@ -195,16 +197,17 @@ function (state::SpinCoherentState)(bases::AbelianBases, table::AbstractDict, dt
 end
 
 """
-    SpinCoherentStateProjection <: Action
+    SpinCoherentStateProjection
 
 Projection of states obtained by exact diagonalization method onto spin coherent states.
 """
-struct SpinCoherentStateProjection <: Action
+struct SpinCoherentStateProjection
     configuration::SpinCoherentState
     polars::Vector{Float64}
     azimuths::Vector{Float64}
 end
 @inline options(::Type{<:Assignment{<:SpinCoherentStateProjection}}) = basicoptions
+@inline dependencytypes(::Type{<:SpinCoherentStateProjection}) = (EDEigen,)
 
 """
     SpinCoherentStateProjection(configuration::SpinCoherentState, polars::AbstractVector{<:Real}, azimuths::AbstractVector{<:Real})
@@ -231,21 +234,21 @@ struct SpinCoherentStateProjectionData <: Data
     values::Matrix{Float64}
 end
 function run!(ed::Algorithm{<:ED}, projection::Assignment{<:SpinCoherentStateProjection}; options...)
-    @assert length(ed.frontend.lattice)==length(projection.action.configuration) "run! error: mismatched lattice and magnetic moment configuration."
+    @assert length(ed.frontend.lattice)==length(projection.task.configuration) "run! error: mismatched lattice and magnetic moment configuration."
     eigensystem = only(projection.dependencies)
     @assert isa(eigensystem, Assignment{<:EDEigen}) "run! error: wrong dependencies."
     table = ed.frontend.matrixization.table
     v₀ = only(eigensystem.data.vectors)
     sector₀ = only(eigensystem.data.sectors)
-    Ψ = empty(projection.action.configuration)
-    result = zeros(Float64, length(projection.action.azimuths), length(projection.action.polars))
-    for (i, θ) in enumerate(projection.action.polars)
-        for (j, ϕ) in enumerate(projection.action.azimuths)
-            for (site, (θ₀, ϕ₀)) in projection.action.configuration
+    Ψ = empty(projection.task.configuration)
+    result = zeros(Float64, length(projection.task.azimuths), length(projection.task.polars))
+    for (i, θ) in enumerate(projection.task.polars)
+        for (j, ϕ) in enumerate(projection.task.azimuths)
+            for (site, (θ₀, ϕ₀)) in projection.task.configuration
                 Ψ[site] = (θ+θ₀, ϕ+ϕ₀)
             end
             result[j, i] = abs2(dot(Ψ(sector₀, table), v₀))
         end
     end
-    return SpinCoherentStateProjectionData(projection.action.polars, projection.action.azimuths, result)
+    return SpinCoherentStateProjectionData(projection.task.polars, projection.task.azimuths, result)
 end

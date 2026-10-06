@@ -153,10 +153,16 @@ Count the number of eigen value-vector-sector groups contained in an `EDEigenDat
     eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the [KrylovKit](https://github.com/Jutho/KrylovKit.jl) package.
+
+When `v₀` is an integer, it is interpreted as the dimension of the Hilbert space and a random initial vector of eltype `scalartype(m)` is used; when `v₀` is a vector, it is used as the initial vector of the restarted Lanczos method and the eltype is inferred from `v₀` itself.
 """
 @inline function eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0)
     @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket Hilbert spaces."
-    eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which, scalartype(m); krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+    if isa(v₀, Int)
+        eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which, scalartype(m); krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+    else
+        eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which; krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+    end
     if length(eigvals) > nev
         eigvals = eigvals[1:nev]
         eigvecs = eigvecs[1:nev]
@@ -171,13 +177,15 @@ end
         which::Symbol=:SR,
         tol::Real=1e-12,
         maxiter::Int=300,
-        v₀::Union{Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}, Dict{<:Sector, <:Union{AbstractVector{<:Number}, Int}}}=Dict(Abelian(m.ket)=>dimension(m.ket) for m in ms),
+        v₀::Union{Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}, Dict{<:Sector, <:Union{AbstractVector{<:Number}, Int}}}=Dict(m.ket=>dimension(m.ket) for m in ms),
         krylovdim::Int=max(20, 2*nev+1),
         verbosity::Int=0,
         timer::TimerOutput=edtimer
     ) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the KrylovKit package.
+
+The initial vectors/dimensions of the restarted Lanczos method can be assigned to the individual sectors by `v₀`, whose keys can be either the sectors or their corresponding Abelian quantum numbers, and whose values can be either vectors (used as the initial vectors) or integers (interpreted as the dimensions of the sectors, in which case random initial vectors are used). Sectors missing from `v₀` fall back to random initial vectors. An error is raised if any key of `v₀` matches no sector of `ms`.
 """
 @inline function eigen(
     ms::OperatorSum{<:EDMatrix};
@@ -192,11 +200,18 @@ Solve the eigen problem by the restarted Lanczos method provided by the KrylovKi
 )
     @timeit timer "eigen" begin
         values, vectors, sectors = real(scalartype(ms))[], Vector{scalartype(ms)}[], eltype(idtype(eltype(ms)))[]
-        isa(v₀, Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}}) && (v₀ = Dict(m.ket=>get(v₀, Abelian(m.ket), dimension(m.ket)) for m in ms))
+        if isa(v₀, Dict{<:Abelian, <:Union{AbstractVector{<:Number}, Int}})
+            unmatched = setdiff(keys(v₀), Set(Abelian(m.ket) for m in ms))
+            isempty(unmatched) || error("eigen error: input v₀ contains Abelian quantum numbers ($(join(unmatched, ", "))) that match no sector.")
+            v₀ = Dict(m.ket=>get(v₀, Abelian(m.ket), dimension(m.ket)) for m in ms)
+        else
+            unmatched = setdiff(keys(v₀), Set(m.ket for m in ms))
+            isempty(unmatched) || error("eigen error: input v₀ contains sectors ($(join(unmatched, ", "))) that match no sector.")
+        end
         for m in ms
             @timeit timer string(Abelian(m.ket)) begin
                 k = min(dimension(m.ket), nev)
-                eigensystem = eigen(m; nev=k, which=which, tol=tol, maxiter=maxiter, v₀=get(v₀, Abelian(m.ket), dimension(m.ket)), krylovdim=krylovdim, verbosity=verbosity)
+                eigensystem = eigen(m; nev=k, which=which, tol=tol, maxiter=maxiter, v₀=get(v₀, m.ket, dimension(m.ket)), krylovdim=krylovdim, verbosity=verbosity)
                 for i = 1:k
                     push!(values, eigensystem.values[i])
                     push!(vectors, eigensystem.vectors[i])
@@ -250,21 +265,25 @@ Construct a matrixization.
     SectorFilter{S} <: LinearTransformation
 
 Filter the target bra and ket Hilbert spaces.
+
+It is a linear projection on `EDMatrix`: the matrix is kept if its id is contained in `brakets`, and zeroed
+otherwise. Since an `OperatorSum` never contains zero entries (zeros are always dropped by `add!`), applied to
+an `OperatorSum{<:EDMatrix}` the excluded entries are effectively removed from the result.
 """
 struct SectorFilter{S} <: LinearTransformation
     brakets::Set{Tuple{S, S}}
 end
 @inline Base.valtype(::Type{<:SectorFilter}, ::Type{M}) where {M<:OperatorSet{<:EDMatrix}} = M
-@inline (sectorfileter::SectorFilter)(m::EDMatrix) = id(m)∈sectorfileter.brakets ? m : EDMatrix(spzeros(scalartype(m), size(value(m))...), id(m))
+@inline (filter::SectorFilter)(m::EDMatrix) = id(m)∈filter.brakets ? m : EDMatrix(spzeros(scalartype(m), size(value(m))...), id(m))
 @inline SectorFilter(sector::Sector, sectors::Sector...) = SectorFilter(map(target->(target, target), (sector, sectors...))...)
 @inline SectorFilter(braket::NTuple{2, Sector}, brakets::NTuple{2, Sector}...) = SectorFilter(push!(Set{typeof(braket)}(), braket, brakets...))
 
 """
-    ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: Frontend
+    ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: LatticeModel
 
 Exact diagonalization method of a quantum lattice system.
 """
-struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: Frontend
+struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operators}, M<:EDMatrixization, H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} <: LatticeModel
     lattice::L
     system::S
     matrixization::M
@@ -274,10 +293,17 @@ struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operator
         new{K, typeof(lattice), typeof(system), typeof(matrixization), typeof(H)}(lattice, system, matrixization, H)
     end
 end
-@inline kind(ed::ED) = kind(typeof(ed))
-@inline kind(::Type{<:ED{K}}) where K = K()
-@inline scalartype(::Type{<:ED{<:EDKind, <:Union{AbstractLattice, Nothing}, <:Generator{<:Operators}, <:EDMatrixization, H}}) where {H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} = scalartype(H)
-@inline scalartype(::Type{<:Algorithm{F}}) where {F<:ED} = scalartype(F)
+
+"""
+    kind(ed::Union{ED, Algorithm{<:ED}}) -> EDKind
+    kind(::Type{<:ED{K}}) where K -> EDKind
+    kind(::Type{<:Algorithm{L}}) where {L<:ED} -> EDKind
+
+Get the kind of an exact diagonalization method.
+"""
+@delegate @inline kind(ed::ED) = kind(typeof(ed))
+@delegate @inline kind(::Type{<:ED{K}}) where K = K()
+@inline Base.valtype(::Type{<:ED{<:EDKind, <:Union{AbstractLattice, Nothing}, <:Generator{<:Operators}, <:EDMatrixization, H}}) where {H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} = valtype(H)
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
         update!(ed.system; kwargs...)
@@ -290,39 +316,37 @@ end
 
 """
     prepare!(ed::ED; timer::TimerOutput=edtimer) -> ED
-    prepare!(ed::Algorithm{<:ED}) -> Algorithm{<:ED}
+    prepare!(ed::Algorithm{<:ED}; timer::TimerOutput=ed.timer) -> ED
 
 Prepare the matrix representation.
 """
-@inline function prepare!(ed::ED; timer::TimerOutput=edtimer)
+@delegate inject=(:timer,) @inline function prepare!(ed::ED; timer::TimerOutput=edtimer)
     isempty(ed.H) && @timeit timer "prepare!" begin
         reset!(ed.H, ed.matrixization, ed.system)
         @info "prepare! complete"
     end
     return ed
 end
-@inline prepare!(ed::Algorithm{<:ED}) = (prepare!(ed.frontend; timer=ed.timer); ed)
 
 """
     release!(ed::ED; gc::Bool=true) -> ED
-    release!(ed::Algorithm{<:ED}; gc::Bool=true) -> Algorithm{<:ED}
+    release!(ed::Algorithm{<:ED}; gc::Bool=true) -> ED
 
 Release the memory source used in preparing the matrix representation. If `gc` is `true`, call the garbage collection immediately.
 """
-@inline function release!(ed::ED; gc::Bool=true)
+@delegate @inline function release!(ed::ED; gc::Bool=true)
     empty!(ed.H)
     gc && GC.gc()
     return ed
 end
-@inline release!(ed::Algorithm{<:ED}; gc::Bool=true) = release!(ed.frontend; gc=gc)
 
 """
     matrix(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false) -> OperatorSum{<:EDMatrix}
-    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false) -> OperatorSum{<:EDMatrix}
+    matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; timer::TimerOutput=ed.timer, release::Bool=false) -> OperatorSum{<:EDMatrix}
 
 Get the sparse matrix representation of a quantum lattice system in the target space.
 """
-function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false)
+@delegate inject=(:timer,) function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(ed.H)
@@ -330,7 +354,7 @@ function matrix(ed::ED; timer::TimerOutput=edtimer, release::Bool=false)
     release && release!(ed; gc=true)
     return result
 end
-function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, release::Bool=false)
+@delegate inject=(:timer,) function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=edtimer, release::Bool=false)
     prepare!(ed; timer=timer)
     @timeit timer "matrix" begin
         result = expand(SectorFilter(sector, sectors...)(ed.H))
@@ -338,7 +362,7 @@ function matrix(ed::ED, sector::Sector, sectors::Sector...; timer::TimerOutput=e
     release && release!(ed; gc=true)
     return result
 end
-function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, release::Bool=false)
+@delegate inject=(:timer,) function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; timer::TimerOutput=edtimer, release::Bool=false)
     sectors = eltype(eltype(ed.matrixization.brakets))[]
     for (bra, ket) in ed.matrixization.brakets
         @assert bra==ket "matrix error: unequal bra and ket Hilbert spaces found."
@@ -346,18 +370,14 @@ function matrix(ed::ED, quantumnumber::Abelian, quantumnumbers::Abelian...; time
     end
     return matrix(ed, sectors...; timer=timer, release=release)
 end
-function matrix(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false)
-    return matrix(ed.frontend, sectors...; timer=ed.timer, release=release)
-end
 
 """
     eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) -> EDEigenData
-    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) -> EDEigenData
+    eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; timer::TimerOutput=ed.timer, release::Bool=false, kwargs...) -> EDEigenData
 
 Solve the eigen problem by the restarted Lanczos method provided by the KrylovKit package.
 """
-@inline eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) = eigen(matrix(ed, sectors...; timer=timer, release=release); timer=timer, kwargs...)
-@inline eigen(ed::Algorithm{<:ED}, sectors::Union{Abelian, Sector}...; release::Bool=false, kwargs...) = eigen(ed.frontend, sectors...; timer=ed.timer, release=release, kwargs...)
+@delegate inject=(:timer,) @inline eigen(ed::ED, sectors::Union{Abelian, Sector}...; timer::TimerOutput=edtimer, release::Bool=false, kwargs...) = eigen(matrix(ed, sectors...; timer=timer, release=release); timer=timer, kwargs...)
 
 """
     ED(system::OperatorGenerator, dtype::Type{<:Number}=scalartype(system))
