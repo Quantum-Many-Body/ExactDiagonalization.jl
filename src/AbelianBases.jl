@@ -131,15 +131,15 @@ Get the matrix representation of an `OperatorIndex` on an Abelian graded space.
 @inline matrix(index::OperatorIndex, graded::Graded, dtype::Type{<:Number}=ComplexF64) = matrix(InternalIndex(index), graded, dtype)
 
 """
-    matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
+    sparse(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
-Get the CSC-formed sparse matrix representation of an operator.
+Get the sparse matrix representation of an operator between the bases of `braket`, extending [`SparseArrays.sparse`](https://sparsearrays.juliasparse.org/dev/#SparseArrays.sparse). For the memoized variant, see [`matrix`](@ref).
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=V) where V
+function sparse(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases{ℤ₁}}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
-    @assert match(bra, ket) "matrix error: mismatched bra and ket."
+    @assert match(bra, ket) "sparse error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
     intermediate = eltype(ms)[]
     for positions in ket.partition
@@ -157,9 +157,9 @@ function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, 
     end
     return result
 end
-function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V
+function sparse(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, AbelianBases}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
-    @assert match(bra, ket) "matrix error: mismatched bra and ket."
+    @assert match(bra, ket) "sparse error: mismatched bra and ket."
     ms = matrices(op, ket.locals, table, dtype)
     intermediate = map((positions, graded, permutation)->blocks(ms[positions], graded, permutation), ket.partition, ket.gradeds, ket.permutations)
     result = SparseMatrixCOO(Int[], Int[], dtype[], dimension(bra), dimension(ket))
@@ -183,8 +183,8 @@ function blocks(ms::Vector{<:SparseMatrixCSC}, graded::Graded, permutation::Vect
     result = Dict{Tuple{eltype(graded), eltype(graded)}, SparseMatrixCOO{eltype(eltype(ms)), Int}}()
     m = permute!(reduce(kron, ms), permutation, permutation)
     rows, vals = rowvals(m), nonzeros(m)
-    for j = 1:length(graded)
-        temp = [(Int[], Int[], eltype(eltype(ms))[]) for i=1:length(graded)]
+    for j in eachindex(graded)
+        temp = [(Int[], Int[], eltype(eltype(ms))[]) for _ in eachindex(graded)]
         for (k, col) in enumerate(range(graded, j))
             pos = 1
             for index in nzrange(m, col)

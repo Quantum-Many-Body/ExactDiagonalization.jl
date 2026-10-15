@@ -298,15 +298,15 @@ function ⊗(bs₁::BinaryBases, bs₂::BinaryBases)
 end
 
 """
-    matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
+    sparse(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
-Get the CSC-formed sparse matrix representation of an operator.
+Get the sparse matrix representation of an operator between the bases of `braket`, extending [`SparseArrays.sparse`](https://sparsearrays.juliasparse.org/dev/#SparseArrays.sparse). For the memoized variant, see [`matrix`](@ref).
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V
+function sparse(op::Operator{V, <:OneAtLeast{OperatorIndex}}, braket::NTuple{2, BinaryBases}, table::AbstractDict, dtype=V) where V
     bra, ket = braket
-    @assert match(bra, ket) "matrix error: mismatched bra and ket."
+    @assert match(bra, ket) "sparse error: mismatched bra and ket."
     ndata, intermediate = 1, zeros(ket|>eltype, length(op)+1)
     data, indices, indptr = zeros(dtype, dimension(ket)), zeros(Int, dimension(ket)), zeros(Int, dimension(ket)+1)
     sequences = NTuple{length(op), Int}(table[op[i]] for i in reverse(1:length(op)))

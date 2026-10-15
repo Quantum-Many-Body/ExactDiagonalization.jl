@@ -7,6 +7,7 @@ using SafeTestsets
     @time @safetestset "BinaryBases" begin include("BinaryBases.jl") end
     @time @safetestset "AbelianBases" begin include("AbelianBases.jl") end
     @time @safetestset "Core" begin include("Core.jl") end
+    @time @safetestset "DiskCache" begin include("DiskCache.jl") end
     @time @safetestset "GreenFunctions" begin include("GreenFunctions.jl") end
     @time @safetestset "Assignments" begin include("Assignments.jl") end
 end

@@ -43,9 +43,9 @@ See also: [`BandLanczosIterator`](@ref), [`expand!`](@ref), [`initialize`](@ref)
 """
 mutable struct BandLanczosFactorization{T, S<:Number, SR<:Real} <: KrylovFactorization{T, S}
     k::Int
-    V::OrthonormalBasis{T}
-    H::Matrix{S}
-    R::Block{T}
+    const V::OrthonormalBasis{T}
+    const H::Matrix{S}
+    const R::Block{T}
     kᵣ::Int
     normᵣ::SR
 end

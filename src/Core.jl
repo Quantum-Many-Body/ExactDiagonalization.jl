@@ -35,7 +35,7 @@ abstract type Sector end
 
 Judge whether two sectors match each other, that is, whether they can be used together as the bra and ket spaces.
 """
-@inline Base.match(sector₁::Sector, sector₂::Sector) = false
+@inline Base.match(::Sector, ::Sector) = false
 
 """
     sumable(sector₁::Sector, sector₂::Sector) -> Bool
@@ -63,38 +63,70 @@ Construct a set of sectors based on the quantum numbers and a Hilbert space.
 end
 
 """
-    matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int) -> SparseMatrixCSC{dtype, Int}
+    sparse(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
 
-Get the CSC-formed sparse matrix representation of an operator index.
+Get the sparse matrix representation of a scalar operator between the bases of `braket`, extending [`SparseArrays.sparse`](https://sparsearrays.juliasparse.org/dev/#SparseArrays.sparse). For the memoized variant, see [`matrix`](@ref).
 """
-@inline matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int) = matrix(Operator(1, op), braket, table, dtype)
-
-"""
-    matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, table::AbstractDict, dtype=V) where V -> SparseMatrixCSC{dtype, Int}
-
-Get the CSC-formed sparse matrix representation of a scalar operator.
-"""
-@inline matrix(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, ::AbstractDict, dtype=V) where V = sparse(one(dtype)*op.value*I, dimension(braket[1]), dimension(braket[2]))
+@inline sparse(op::Operator{V, Tuple{}}, braket::NTuple{2, Sector}, ::AbstractDict, dtype=V) where V = sparse(one(dtype)*op.value*I, dimension(braket[1]), dimension(braket[2]))
 
 """
-    matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops)) -> SparseMatrixCSC{dtype, Int}
+    matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int; cached::Bool=false) -> DiskCSCMatrix{dtype, Int}
 
-Get the CSC-formed sparse matrix representation of a set of operators.
+Get the sparse matrix representation of an operator index as a [`DiskCSCMatrix`](@ref) proxy. The keyword `cached` is forwarded to the memoization wrapper of [`matrix`](@ref).
+"""
+@inline matrix(op::OperatorIndex, braket::NTuple{2, Sector}, table::AbstractDict, dtype=Int; cached::Bool=false) = matrix(Operator(1, op), braket, table, dtype; cached=cached)
+
+"""
+    matrix(op::Operator, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(op); cached::Bool=false) -> DiskCSCMatrix{dtype, Int}
+
+Get the sparse matrix representation of an operator between the bases of `braket` as a [`DiskCSCMatrix`](@ref) proxy. With `cached=false` (the default), the proxy is anonymous: it is neither written to disk nor entered into the cache, and neither is anything derived from it by the algebra of `DiskCSCMatrix`. With `cached=true`, the matrix is stored in the session-wide [`DiskCache`](@ref) under its [`cachekey`](@ref) (on disk when larger than the threshold), and identical (operator, bases, table, element type) contents return the shared proxy without reconstructing. The construction is done by [`sparse`](@ref).
 
 Here, `table` specifies the order of the operator indexes.
 """
-function matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops))
-    length(ops)==0 && return spzeros(dtype, length(braket[1]), length(braket[2]))
-    length(ops)==1 && return matrix(ops[1], braket, table, dtype)
-    return matrix(ops[1:length(ops)÷2], braket, table, dtype) + matrix(ops[length(ops)÷2+1:length(ops)], braket, table, dtype)
+function matrix(op::Operator, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(op); cached::Bool=false)
+    cached || return DiskCSCMatrix(sparse(op, braket, table, dtype))
+    key = cachekey(op, braket, table, dtype)
+    cache = diskcache()
+    haskey(cache.entries, key) && return cache.entries[key]::DiskCSCMatrix{dtype, Int}
+    return store!(cache, key, sparse(op, braket, table, dtype))
 end
 
 """
-    EDMatrix{M<:SparseMatrixCSC, S<:Sector} <: OperatorPack{M, Tuple{S, S}}
+    matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops); cached::Bool=false) -> DiskCSCMatrix{dtype, Int}
+
+Get the sparse matrix representation of a set of operators between the bases of `braket` as a [`DiskCSCMatrix`](@ref) proxy (the sum of the per-operator proxies; see [`matrix`](@ref)). The recursive bisection construction is always anonymous: intermediate sums are neither cached nor written to disk. With `cached=true`, only the final block is memoized: its [`cachekey`](@ref) is looked up in the session-wide [`DiskCache`](@ref) before construction (a hit skips the construction entirely), and a miss is stored under that key afterwards. A length-1 set is delegated to the operator-level method so that identical contents share the same key.
+
+Here, `table` specifies the order of the operator indexes.
+"""
+function matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(ops); cached::Bool=false)
+    length(ops)==0 && return DiskCSCMatrix(spzeros(dtype, length(braket[1]), length(braket[2])))
+    length(ops)==1 && return matrix(ops[1], braket, table, dtype; cached=cached)
+    cached || return matrix(ops[1:length(ops)÷2], braket, table, dtype) + matrix(ops[length(ops)÷2+1:length(ops)], braket, table, dtype)
+    key = cachekey(ops, braket, table, dtype)
+    cache = diskcache()
+    haskey(cache.entries, key) && return cache.entries[key]::DiskCSCMatrix{dtype, Int}
+    return store!(cache, key, sparse(matrix(ops, braket, table, dtype)))
+end
+
+"""
+    cachekey(ops::Union{Operator, Operators}, braket::NTuple{2, Sector}, table::AbstractDict, dtype::Type{<:Number}) -> String
+
+The content key of the matrix of an operator or a set of operators between the bases of `braket`, used by the memoized [`matrix`](@ref) wrapper: the serialized content of the operator(s) (including the coefficients), the defining content of the two bases (type, `id`, dimension), the index table, and the matrix element type. The key is the raw serialization bytes held in a `String` container (an opaque binary blob, not valid UTF-8 text; only `hash`/`isequal`/dictionary lookups are meaningful on it). Since the full content bytes are the key, distinct contents are never confused, regardless of hash collisions.
+
+For an `Operators`, the key depends on the iteration order of the set (the insertion order of its `OrderedDict` contents): identical construction paths yield identical keys, while the same terms assembled in a different order yield a different key (a benign cache miss, never an error).
+"""
+function cachekey(ops::Union{Operator, Operators}, braket::NTuple{2, Sector}, table::AbstractDict, dtype::Type{<:Number})
+    io = IOBuffer()
+    serialize(io, (ops, map(bs->(typeof(bs), id(bs), dimension(bs)), braket), table, dtype))
+    return String(take!(io))
+end
+
+"""
+    EDMatrix{M<:DiskCSCMatrix, S<:Sector} <: OperatorPack{M, Tuple{S, S}}
 
 Matrix representation of quantum operators between a ket Hilbert space and a bra Hilbert space.
 """
-struct EDMatrix{M<:SparseMatrixCSC, S<:Sector} <: OperatorPack{M, Tuple{S, S}}
+struct EDMatrix{M<:DiskCSCMatrix, S<:Sector} <: OperatorPack{M, Tuple{S, S}}
     matrix::M
     bra::S
     ket::S
@@ -108,17 +140,22 @@ end
 @inline Base.show(io::IO, ::MIME"text/plain", m::EDMatrix) = showcontent(io, m)
 
 """
-    EDMatrix(m::SparseMatrixCSC, sector::Sector)
-    EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector})
-    EDMatrix(m::SparseMatrixCSC, bra::Sector, ket::Sector)
+    EDMatrix(m::Union{DiskCSCMatrix, SparseMatrixCSC}, sector::Sector)
+    EDMatrix(m::Union{DiskCSCMatrix, SparseMatrixCSC}, braket::NTuple{2, Sector})
+    EDMatrix(m::Union{DiskCSCMatrix, SparseMatrixCSC}, bra::Sector, ket::Sector)
 
 Construct a matrix representation when
 1) the bra and ket Hilbert spaces share the same bases;
 2) the bra and ket Hilbert spaces may be different;
 3) the bra and ket Hilbert spaces may or may not be the same.
+
+The sparse matrix payload is wrapped into an in-memory [`DiskCSCMatrix`](@ref) proxy.
 """
-@inline EDMatrix(m::SparseMatrixCSC, sector::Sector) = EDMatrix(m, sector, sector)
-@inline EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector}) = EDMatrix(m, braket[1], braket[2])
+@inline EDMatrix(m::SparseMatrixCSC, sector::Sector) = EDMatrix(DiskCSCMatrix(m), sector)
+@inline EDMatrix(m::SparseMatrixCSC, bra::Sector, ket::Sector) = EDMatrix(DiskCSCMatrix(m), bra, ket)
+@inline EDMatrix(m::SparseMatrixCSC, braket::NTuple{2, Sector}) = EDMatrix(DiskCSCMatrix(m), braket)
+@inline EDMatrix(m::DiskCSCMatrix, sector::Sector) = EDMatrix(m, sector, sector)
+@inline EDMatrix(m::DiskCSCMatrix, braket::NTuple{2, Sector}) = EDMatrix(m, braket[1], braket[2])
 
 """
     EDEigenData{V<:Number, T<:Number, S<:Sector} <: Data
@@ -159,9 +196,9 @@ When `v₀` is an integer, it is interpreted as the dimension of the Hilbert spa
 @inline function eigen(m::EDMatrix; nev::Int=1, which::Symbol=:SR, tol::Real=1e-12, maxiter::Int=300, v₀::Union{AbstractVector{<:Number}, Int}=dimension(m.bra), krylovdim::Int=max(20, 2*nev+1), verbosity::Int=0)
     @assert m.bra==m.ket "eigen error: eigen decomposition of an `EDMatrix` are only available for those with the same bra and ket Hilbert spaces."
     if isa(v₀, Int)
-        eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which, scalartype(m); krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+        eigvals, eigvecs = eigsolve(sparse(m.matrix), v₀, nev, which, scalartype(m); krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
     else
-        eigvals, eigvecs = eigsolve(m.matrix, v₀, nev, which; krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
+        eigvals, eigvecs = eigsolve(sparse(m.matrix), v₀, nev, which; krylovdim=krylovdim, tol=tol, maxiter=maxiter, ishermitian=true, verbosity=verbosity)
     end
     if length(eigvals) > nev
         eigvals = eigvals[1:nev]
@@ -238,20 +275,36 @@ struct EDMatrixization{D<:Number, T<:AbstractDict, S<:Sector} <: Matrixization
 end
 @inline function Base.valtype(::Type{<:EDMatrixization{D, <:AbstractDict, S}}, ::Type{M}) where {D<:Number, S<:Sector, M<:Operator}
     @assert promote_type(D, valtype(M))==D "valtype error: convert $(valtype(M)) to $D is inexact."
-    E = EDMatrix{SparseMatrixCSC{D, Int}, S}
+    E = EDMatrix{DiskCSCMatrix{D, Int}, S}
     return OperatorSum{E, idtype(E)}
 end
 @inline Base.valtype(::Type{R}, ::Type{M}) where {R<:EDMatrixization, M<:OperatorSet} = valtype(R, eltype(M))
-function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; kwargs...)
+@inline contenttoconfig(matrixization::EDMatrixization) = (matrixization.table, [map(id, braket) for braket in matrixization.brakets])
+
+"""
+    (matrixization::EDMatrixization)(m::Union{Operator, Operators}; cached::Bool=true, kwargs...) -> OperatorSum{<:EDMatrix}
+
+Get the matrix representation of an operator or a set of operators on the target Hilbert space as an `OperatorSum` of [`EDMatrix`](@ref) blocks, one per `braket` of `matrixization`. With `cached=true` (the default), each block is memoized in the session-wide [`DiskCache`](@ref) under its [`cachekey`](@ref) (see [`matrix`](@ref)), so that identical systems share the blocks without reconstructing them.
+"""
+function (matrixization::EDMatrixization)(m::Union{Operator, Operators}; cached::Bool=true, kwargs...)
     result = zero(valtype(matrixization, m))
     if isa(m, Operator) || length(m)>0
         for braket in matrixization.brakets
-            add!(result, EDMatrix(matrix(m, braket, matrixization.table, scalartype(result)), braket))
+            add!(result, EDMatrix(matrix(m, braket, matrixization.table, scalartype(result); cached=cached), braket))
         end
     end
     return result
 end
-@inline contenttoconfig(matrixization::EDMatrixization) = (matrixization.table, [map(id, braket) for braket in matrixization.brakets])
+
+"""
+    add!(destination, transformation::EDMatrixization, ops::OperatorSet; kwargs...)
+
+Add the matrix representation of a whole set of operators to `destination`, specializing the generic element-wise contract of [`add!`](@ref) for [`EDMatrixization`](@ref): the set is matrixized as a whole (the result coincides by linearity), so that the memoization happens at the level of the merged block under the set-level [`cachekey`](@ref) instead of per operator.
+"""
+@inline function add!(destination, transformation::EDMatrixization, ops::OperatorSet; kwargs...)
+    add!(destination, transformation(ops; kwargs...))
+    return destination
+end
 
 """
     EDMatrixization{D}(table::AbstractDict, sector::S, sectors::S...) where {D<:Number, S<:Sector}
@@ -266,9 +319,7 @@ Construct a matrixization.
 
 Filter the target bra and ket Hilbert spaces.
 
-It is a linear projection on `EDMatrix`: the matrix is kept if its id is contained in `brakets`, and zeroed
-otherwise. Since an `OperatorSum` never contains zero entries (zeros are always dropped by `add!`), applied to
-an `OperatorSum{<:EDMatrix}` the excluded entries are effectively removed from the result.
+It is a linear projection on `EDMatrix`: the matrix is kept if its id is contained in `brakets`, and zeroed otherwise. Since an `OperatorSum` never contains zero entries (zeros are always dropped by `add!`), applied to an `OperatorSum{<:EDMatrix}` the excluded entries are effectively removed from the result.
 """
 struct SectorFilter{S} <: LinearTransformation
     brakets::Set{Tuple{S, S}}
@@ -293,16 +344,6 @@ struct ED{K<:EDKind, L<:Union{AbstractLattice, Nothing}, S<:Generator{<:Operator
         new{K, typeof(lattice), typeof(system), typeof(matrixization), typeof(H)}(lattice, system, matrixization, H)
     end
 end
-
-"""
-    kind(ed::Union{ED, Algorithm{<:ED}}) -> EDKind
-    kind(::Type{<:ED{K}}) where K -> EDKind
-    kind(::Type{<:Algorithm{L}}) where {L<:ED} -> EDKind
-
-Get the kind of an exact diagonalization method.
-"""
-@delegate @inline kind(ed::ED) = kind(typeof(ed))
-@delegate @inline kind(::Type{<:ED{K}}) where K = K()
 @inline Base.valtype(::Type{<:ED{<:EDKind, <:Union{AbstractLattice, Nothing}, <:Generator{<:Operators}, <:EDMatrixization, H}}) where {H<:CategorizedGenerator{<:OperatorSum{<:EDMatrix}}} = valtype(H)
 @inline function update!(ed::ED; kwargs...)
     if length(kwargs)>0
@@ -313,6 +354,16 @@ Get the kind of an exact diagonalization method.
 end
 @inline Parameters(ed::ED) = Parameters(ed.system)
 @inline contenttoconfig(ed::ED) = (ed.lattice, contenttoconfig(ed.system), contenttoconfig(ed.matrixization))
+
+"""
+    kind(ed::Union{ED, Algorithm{<:ED}}) -> EDKind
+    kind(::Type{<:ED{K}}) where K -> EDKind
+    kind(::Type{<:Algorithm{L}}) where {L<:ED} -> EDKind
+
+Get the kind of an exact diagonalization method.
+"""
+@delegate @inline kind(ed::ED) = kind(typeof(ed))
+@delegate @inline kind(::Type{<:ED{K}}) where K = K()
 
 """
     prepare!(ed::ED; timer::TimerOutput=edtimer) -> ED
@@ -369,6 +420,20 @@ end
         Abelian(bra)∈(quantumnumber, quantumnumbers...) && push!(sectors, bra)
     end
     return matrix(ed, sectors...; timer=timer, release=release)
+end
+
+"""
+    sparse(ed::ED, sector::Sector; timer::TimerOutput=edtimer) -> SparseMatrixCSC
+
+Get the sparse matrix representation of a quantum lattice system in a single sector, extending [`SparseArrays.sparse`](https://sparsearrays.juliasparse.org/dev/#SparseArrays.sparse). The construction reuses the cached operator blocks from the session-wide [`DiskCache`](@ref) implicitly.
+"""
+function sparse(ed::ED, sector::Sector; timer::TimerOutput=edtimer)
+    m = if (sector, sector) ∈ ed.matrixization.brakets
+        matrix(ed, sector; timer=timer)
+    else
+        @timeit timer "matrix" EDMatrixization{scalartype(ed)}(ed.matrixization.table, sector)(expand(ed.system))
+    end
+    return sparse(value(only(m)))
 end
 
 """

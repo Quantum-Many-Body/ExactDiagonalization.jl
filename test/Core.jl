@@ -1,5 +1,5 @@
 using ExactDiagonalization
-using ExactDiagonalization: SectorFilter
+using ExactDiagonalization: DiskCSCMatrix, SectorFilter
 using QuantumLattices: Algorithm, Fock, Heisenberg, Hilbert, Hopping, Hubbard, Lattice, Onsite, Operator, OperatorSum, OperatorIndexToTuple, Parameters, Spin, Table
 using QuantumLattices: contenttoconfig, getcontent, idtype, parameternames, showasleaf, 𝕔
 using SparseArrays: SparseMatrixCSC
@@ -11,7 +11,7 @@ using SparseArrays: SparseMatrixCSC
     @test getcontent(m, :id) == (m.bra, m.ket)
     @test getcontent(m, :value) == m.matrix
     @test scalartype(m) == scalartype(typeof(m)) == Float64
-    @test promote_type(typeof(m), ComplexF64) == EDMatrix{SparseMatrixCSC{ComplexF64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
+    @test promote_type(typeof(m), ComplexF64) == EDMatrix{DiskCSCMatrix{ComplexF64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
     @test showasleaf(typeof(m)) == false
     @test string(m) == "EDMatrix\n  matrix: 6×6 SparseArrays.SparseMatrixCSC{Float64, Int64} with 15 stored entries:\n   2.0  1.0   ⋅    ⋅    ⋅    ⋅ \n   1.0   ⋅   1.0  1.0   ⋅    ⋅ \n    ⋅   1.0  2.0   ⋅   1.0   ⋅ \n    ⋅   1.0   ⋅    ⋅   1.0   ⋅ \n    ⋅    ⋅   1.0  1.0   ⋅   1.0\n    ⋅    ⋅    ⋅    ⋅   1.0  2.0\n  bra: 2^[1 2 3 4] => ℕ(2)\n  ket: 2^[1 2 3 4] => ℕ(2)"
 
@@ -34,7 +34,7 @@ end
     op₁, op₂, op₃ = Operator(2.0, indexes[2]', indexes[1]), Operator(2.0, indexes[3]', indexes[2]), Operator(2.0, indexes[4]', indexes[3])
     ops = op₁ + op₂ + op₃
     sectors = (BinaryBases(1:4, ℕ(1)), BinaryBases(1:4, ℕ(2)), BinaryBases(1:4, ℕ(3)))
-    M = EDMatrix{SparseMatrixCSC{Float64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
+    M = EDMatrix{DiskCSCMatrix{Float64, Int}, BinaryBases{ℕ, BinaryBasis{UInt}, Vector{BinaryBasis{UInt}}}}
 
     mr = EDMatrixization{Float64}(table, sectors...)
     @test valtype(typeof(mr), eltype(ops)) == valtype(typeof(mr), typeof(ops)) == OperatorSum{M, idtype(M)}
