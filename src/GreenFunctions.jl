@@ -213,7 +213,7 @@ function GreenFunction(
     e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Green Function ($(string(kind)), $method)"
+        @info "Green Function ($(string(kind)))"
         if any(isnothing, (e₀, v₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
             @info "eigen complete"
