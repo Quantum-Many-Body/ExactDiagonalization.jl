@@ -85,10 +85,10 @@ Here, `table` specifies the order of the operator indexes.
 """
 function matrix(op::Operator, braket::NTuple{2, Sector}, table::AbstractDict, dtype=scalartype(op); cached::Bool=false)
     cached || return DiskCSCMatrix(sparse(op, braket, table, dtype))
-    key = cachekey(op, braket, table, dtype)
-    cache = diskcache()
-    haskey(cache.entries, key) && return cache.entries[key]::DiskCSCMatrix{dtype, Int}
-    return store!(cache, key, sparse(op, braket, table, dtype))
+    dm = get!(diskcache(), cachekey(op, braket, table, dtype)) do
+        sparse(op, braket, table, dtype)
+    end
+    return dm::DiskCSCMatrix{dtype, Int}
 end
 
 """
@@ -102,10 +102,10 @@ function matrix(ops::Operators, braket::NTuple{2, Sector}, table::AbstractDict, 
     length(ops)==0 && return DiskCSCMatrix(spzeros(dtype, length(braket[1]), length(braket[2])))
     length(ops)==1 && return matrix(ops[1], braket, table, dtype; cached=cached)
     cached || return matrix(ops[1:length(ops)÷2], braket, table, dtype) + matrix(ops[length(ops)÷2+1:length(ops)], braket, table, dtype)
-    key = cachekey(ops, braket, table, dtype)
-    cache = diskcache()
-    haskey(cache.entries, key) && return cache.entries[key]::DiskCSCMatrix{dtype, Int}
-    return store!(cache, key, sparse(matrix(ops, braket, table, dtype)))
+    dm = get!(diskcache(), cachekey(ops, braket, table, dtype)) do
+        sparse(matrix(ops, braket, table, dtype))
+    end
+    return dm::DiskCSCMatrix{dtype, Int}
 end
 
 """
