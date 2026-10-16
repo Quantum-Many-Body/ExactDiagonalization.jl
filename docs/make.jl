@@ -11,6 +11,7 @@ makedocs(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://Quantum-Many-Body.github.io/ExactDiagonalization.jl",
         assets=["assets/favicon.ico", "assets/custom.css"],
+        size_threshold=2^22,
     ),
     pages=[
         "Home" => "index.md",
