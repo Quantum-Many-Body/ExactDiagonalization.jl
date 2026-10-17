@@ -129,7 +129,7 @@ end
 
 Expand the band Lanczos factorization by one block step.
 
-1. QR-decompose the residual block via `block_qr!(R, iter.tolᵣ, iter.orthᵣ)`. If the residual is exhausted (`bsₙ == 0`), return the state unchanged.
+1. QR-decompose the residual block via `block_qr!(R, iter.tolᵣ, iter.orthᵣ)`. If the residual is exhausted (`bsₙ == 0`), the Krylov space cannot grow any further and the factorization is exact up to `tolᵣ`: it is marked as converged (`normᵣ = 0`, so that `normres`-based iteration loops terminate) and returned without further expansion.
 2. Append the QR-orthonormalized residual to the basis.
 3. Fill the off-diagonal blocks of `H` with the QR factor `B`.
 4. Compute the next residual via [`band_lanczosrecurrence`](@ref) using `iter.orthₒ`.
@@ -139,6 +139,7 @@ Expand the band Lanczos factorization by one block step.
 function expand!(iter::BandLanczosIterator, state::BandLanczosFactorization)
     R = residual(state)
     B, indexes = block_qr!(R, iter.tolᵣ, iter.orthᵣ)
+    isempty(indexes) && (state.normᵣ = zero(state.normᵣ); return state)
     k = length(state)
     bs = state.kᵣ
     bsₙ = length(indexes)
