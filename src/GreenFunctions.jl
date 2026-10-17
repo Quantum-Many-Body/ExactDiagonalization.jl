@@ -481,7 +481,7 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalExactMethod;
-        E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Real}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct the finite-temperature Green function at inverse temperature `method.β` by exact method. The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
@@ -491,7 +491,7 @@ Construct the finite-temperature Green function at inverse temperature `method.�
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalExactMethod;
-    E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Real}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
         @info "Thermal Green Function ($(string(kind)), exact, β=$(method.β))"
@@ -709,14 +709,14 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalExactMethod;
-        sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Real}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct the finite-temperature retarded Green function at inverse temperature `method.β` by the exact method, as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which share the same ground-state sector spectrum: computed internally, or reused from `E₀` and `U₀` provided together.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalExactMethod;
-    sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Real}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
         @info "Retarded Green Function (exact, β=$(method.β))"
