@@ -7,7 +7,9 @@ import CairoMakie as Makie
 import Plots
 
 @testset "GreenFunctionMethod" begin
-    @test string(ExactMethod()) == "ExactMethod()"
+    method = ExactMethod()
+    @test string(method) == "ExactMethod()"
+    @test contenttoconfig(method) === method
 
     method = BandLanczosMethod()
     @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
@@ -17,6 +19,7 @@ import Plots
     @test method.maxdim == 200
     @test method.orthᵣ == ModifiedGramSchmidt2()
     @test method.orthₒ == ModifiedGramSchmidt()
+    @test contenttoconfig(method) === method
 
     method = BandLanczosMethod(tol=1e-5, tolᵣ=1e-12, keepvecs=false, maxdim=100)
     @test string(method) == "BandLanczosMethod(1.0e-5, 1.0e-12, false, 100, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
@@ -34,6 +37,7 @@ import Plots
     @test string(method) == "ThermalExactMethod(2.0, 0.0)"
     @test method.β == 2.0
     @test method.cutoff == 0.0
+    @test contenttoconfig(method) === method
 
     method = ThermalExactMethod(2.0; cutoff=0.1)
     @test string(method) == "ThermalExactMethod(2.0, 0.1)"
@@ -57,6 +61,7 @@ import Plots
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=0.0)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, cutoff=1.5)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, nrandom=0)
+    @test contenttoconfig(method) == (method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ)
 end
 
 @testset "GreenFunction: comparison of all methods" begin

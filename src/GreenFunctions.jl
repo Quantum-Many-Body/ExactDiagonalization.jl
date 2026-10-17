@@ -40,6 +40,7 @@ const GreaterOrLesserKind = Union{GreenFunctionKind{:greater}, GreenFunctionKind
 Abstract type for the methods to compute Green's functions.
 """
 abstract type GreenFunctionMethod end
+@inline contenttoconfig(method::GreenFunctionMethod) = method
 
 """
     GreenFunction{T<:Number, V<:Real} <: Function
@@ -447,6 +448,10 @@ end
 @inline function Base.show(io::IO, method::ThermalSeedBandLanczosMethod)
     print(io, "ThermalSeedBandLanczosMethod(", method.β, ", ", method.cutoff, ", ", method.nrandom, ", ", method.maxdim₁, ", ", method.maxdim₂, ", ", method.seed, ", ", method.tol, ", ", method.tolᵣ, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
 end
+# For `ThermalSeedBandLanczosMethod`, the `samples` field is lazily filled at Green function construction, so it must not enter the fingerprint (a save would hash the filled one while a load would hash the empty one).
+@inline contenttoconfig(method::ThermalSeedBandLanczosMethod) = (
+    method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ
+)
 
 """
     ThermalSeedBandLanczosMethod(
