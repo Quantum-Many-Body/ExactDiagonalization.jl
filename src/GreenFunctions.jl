@@ -412,13 +412,15 @@ end
 
 """
     ThermalExactMethod(β::Real; cutoff::Real=0.0)
+    ThermalExactMethod(; β::Real, cutoff::Real=0.0)
 
-Construct a `ThermalExactMethod` for computing the finite-temperature Green function at inverse temperature `β` by exact diagonalization.
+Construct a `ThermalExactMethod` for computing the finite-temperature Green function at inverse temperature `β` by exact diagonalization. The inverse temperature can be passed either positionally or as the keyword `β` (the latter matches [`ThermalSeedBandLanczosMethod`](@ref)).
 
 - `β`: the inverse temperature.
 - `cutoff`: Boltzmann weight threshold (dimensionless). Only eigenstates with `exp(-β*(Eₙ-e₀))>=cutoff` are kept as initial states. The default `0.0` keeps all eigenstates (strictly exact).
 """
 @inline ThermalExactMethod(β::Real; cutoff::Real=0.0) = ThermalExactMethod(β, cutoff)
+@inline ThermalExactMethod(; β::Real, cutoff::Real=0.0) = ThermalExactMethod(β, cutoff)
 
 """
     ThermalSeedBandLanczosMethod{OQ<:Orthogonalizer, OR<:Orthogonalizer} <: GreenFunctionMethod

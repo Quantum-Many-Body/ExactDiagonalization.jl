@@ -45,6 +45,14 @@ import Plots
     @test_throws AssertionError ThermalExactMethod(-1.0)
     @test_throws AssertionError ThermalExactMethod(1.0; cutoff=1.5)
 
+    # the keyword-β form (matching ThermalSeedBandLanczosMethod) is equivalent to the positional one
+    method = ThermalExactMethod(β=2.0)
+    @test string(method) == "ThermalExactMethod(2.0, 0.0)"
+    @test (method.β, method.cutoff) == (2.0, 0.0)
+    method = ThermalExactMethod(β=2.0; cutoff=0.1)
+    @test (method.β, method.cutoff) == (2.0, 0.1)
+    @test_throws AssertionError ThermalExactMethod(β=-1.0)
+
     method = ThermalSeedBandLanczosMethod(β=2.0)
     @test string(method) == "ThermalSeedBandLanczosMethod(2.0, 0.001, 10, 200, 200, 0, 2.0e-8, 1.0e-8, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
     @test method.β == 2.0
