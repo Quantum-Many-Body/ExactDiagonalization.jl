@@ -162,6 +162,7 @@ Suitable for small Hilbert spaces and as the benchmark of [`BandLanczosMethod`](
 """
 struct ExactMethod <: GreenFunctionMethod end
 @inline Base.show(io::IO, ::ExactMethod) = print(io, "ExactMethod()")
+@inline str(::ExactMethod) = "exact"
 
 """
     BandLanczosMethod <: GreenFunctionMethod
@@ -179,6 +180,7 @@ end
 @inline function Base.show(io::IO, method::BandLanczosMethod)
     print(io, "BandLanczosMethod(", method.tol, ", ", method.tolᵣ, ", ", method.keepvecs, ", ", method.maxdim, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
 end
+@inline str(method::BandLanczosMethod) = "Lanczos, maxdim=$(method.maxdim)"
 
 """
     BandLanczosMethod(
@@ -214,10 +216,10 @@ function GreenFunction(
     e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Green Function ($(string(kind)))"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
         T = promote_type(scalartype(operators), scalartype(ed))
@@ -229,8 +231,7 @@ function GreenFunction(
                 @timeit timer string(Abelian(sector)) begin
                     H = sparse(ed, sector; timer=timer)
                     @info "- matrix complete"
-                    V = @timeit timer "initial states" [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*v₀ for index in ranks]
-                    @info "- initial states complete"
+                    V = [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*v₀ for index in ranks]
                     @timeit timer "poles" begin
                         Ẽ, S̃ = resolve(H, V, method)
                         Lₚ, Rₚ, Eₚ = poles(S̃, S̃, Ẽ, 1.0, e₀; kind=Symbol(kind))
@@ -379,10 +380,10 @@ function GreenFunction(
     sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Retarded Green Function"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
         greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
@@ -409,6 +410,7 @@ struct ThermalExactMethod <: GreenFunctionMethod
     end
 end
 @inline Base.show(io::IO, method::ThermalExactMethod) = print(io, "ThermalExactMethod(", method.β, ", ", method.cutoff, ")")
+@inline str(method::ThermalExactMethod; ndecimal::Integer=14) = "thermal exact, β=$(str(method.β; ndecimal=ndecimal)), cutoff=$(str(method.cutoff; ndecimal=ndecimal))"
 
 """
     ThermalExactMethod(β::Real; cutoff::Real=0.0)
@@ -450,6 +452,7 @@ end
 @inline function Base.show(io::IO, method::ThermalSeedBandLanczosMethod)
     print(io, "ThermalSeedBandLanczosMethod(", method.β, ", ", method.cutoff, ", ", method.nrandom, ", ", method.maxdim₁, ", ", method.maxdim₂, ", ", method.seed, ", ", method.tol, ", ", method.tolᵣ, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
 end
+@inline str(method::ThermalSeedBandLanczosMethod; ndecimal::Integer=14) = "thermal Lanczos, β=$(str(method.β; ndecimal=ndecimal)), cutoff=$(str(method.cutoff; ndecimal=ndecimal)), R=$(method.nrandom)"
 # For `ThermalSeedBandLanczosMethod`, the `samples` field is lazily filled at Green function construction, so it must not enter the fingerprint (a save would hash the filled one while a load would hash the empty one).
 @inline contenttoconfig(method::ThermalSeedBandLanczosMethod) = (
     method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ
@@ -501,15 +504,15 @@ function GreenFunction(
     E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Thermal Green Function ($(string(kind)), exact, β=$(method.β))"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         @assert isnothing(E₀)==isnothing(U₀) "GreenFunction error: E₀ and U₀ must be provided together."
         if isnothing(sector₀)
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             sector₀ = only(eigensystem.sectors)
         end
         if isnothing(E₀)
-            E₀, U₀ = eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
+            E₀, U₀ = @timeit timer "spectrum" eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
             @info "- spectrum (sector₀) complete, dimension $(length(E₀))"
         end
         e₀ = E₀[1]
@@ -523,14 +526,16 @@ function GreenFunction(
         groups = sectorgroups(operators, ed, sector₀)
         blocks = Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}[]
         for (i, (sector, ranks)) in enumerate(pairs(groups))
-            @info "($kind: $i/$(length(groups))) sector $(Abelian(sector))"
+            @info "($i/$(length(groups))) sector $(Abelian(sector))"
             dimension(sector) > 0 || continue
             @timeit timer string(Abelian(sector)) begin
-                H = @timeit timer "matrix" sparse(ed, sector; timer=timer)
+                H = sparse(ed, sector; timer=timer)
                 @info "- matrix complete"
-                eigensystem = @timeit timer "eigen" eigen(Hermitian(collect(H)))
+                eigensystem = @timeit timer "spectrum" eigen(Hermitian(collect(H)))
+                @info "- spectrum complete, dimension $(length(eigensystem.values))"
                 Xs = map(a->matrix(ops′[a], (sector, sector₀), ed.matrixization.table, T; cached=true), ranks)
                 Lₚ, Rₚ, Eₚ = @timeit timer "poles" poles(Xs, Uₖ, eigensystem.vectors, eigensystem.values, wₖ./Z, Eₖ; kind=Symbol(kind))
+                @info "- poles complete"
                 push!(blocks, (Lₚ, Rₚ, Eₚ, ranks))
             end
         end
@@ -555,10 +560,10 @@ function GreenFunction(
     e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Thermal Green Function ($(string(kind)), β=$(method.β), R=$(method.nrandom))"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             e₀, sector₀ = only(eigensystem.values), only(eigensystem.sectors)
         end
         T = promote_type(scalartype(operators), scalartype(ed))
@@ -582,7 +587,7 @@ end
 """
     ThermalSample{T<:Number, V<:Real}
 
-The per-sample data of the first Lanczos run (state preparation) of the thermally-weighted seed method (see [`ThermalSeedBandLanczosMethod`](@ref)) for a single random vector `|r⟩`, with `oᵢ = ⟨r|ψᵢ⟩` denoting the overlaps of the random vector with the Ritz states:
+The per-sample data of the first Lanczos run (thermal state preparation) of the thermally-weighted seed method (see [`ThermalSeedBandLanczosMethod`](@ref)) for a single random vector `|r⟩`, with `oᵢ = ⟨r|ψᵢ⟩` denoting the overlaps of the random vector with the Ritz states:
 
 - `φ::Vector{T}`: the thermally-weighted state `|φ⟩ = ∑ᵢ exp(-βεᵢ/2)conj(oᵢ)|ψᵢ⟩` (the TPQ state);
 - `energies::Vector{V}`: the Ritz energies `εᵢ` of the kept states (absolute energies);
@@ -605,23 +610,24 @@ end
 """
     ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer) -> ThermalSample
 
-Construct a `ThermalSample` for a **single** random vector of the thermally-weighted seed method, by running the first Lanczos (state preparation) on the ground-state-sector Hamiltonian `H₀` with ground-state energy `e₀`. The random vector is drawn from the global RNG; call `seed!(method.seed)` before the sample loop for reproducibility.
+Construct a `ThermalSample` for a **single** random vector of the thermally-weighted seed method, by running the first Lanczos (thermal state preparation) on the ground-state-sector Hamiltonian `H₀` with ground-state energy `e₀`. The random vector is drawn from the global RNG; call `seed!(method.seed)` before the sample loop for reproducibility.
 """
 function ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer)
     rv = randn(eltype(H₀), size(H₀, 1))
     normalize!(rv)
     iter = BandLanczosIterator(H₀, Block([rv]), method.maxdim₁+1, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ; keepvecs=true)
     fact = initialize(iter)
-    @timeit timer "state preparation" with_logger(RawStderrLogger()) do
+    @timeit timer "thermal state" with_logger(RawStderrLogger()) do
         ran = false
         while length(fact) < method.maxdim₁ && normres(fact) > iter.tol
             progress = length(fact) / method.maxdim₁ * 100
-            @info "\r[ Info: - state preparation $(round(progress, digits=1))% ($(length(fact))/$(method.maxdim₁))..."
+            @info "\r[ Info: - thermal state $(round(progress, digits=1))% ($(length(fact))/$(method.maxdim₁))..."
             ran = true
             expand!(iter, fact)
         end
         ran && @info "\n"
     end
+    @info "- thermal state complete"
     E, U = eigen(Hermitian(rayleighquotient(fact)))
     o = U[1, :]
     z = sum(abs2.(o) .* exp.(-method.β .* (E .- e₀)))
@@ -672,11 +678,13 @@ function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:Quantu
     ops′ = map(adjoint, operators)
     groups = sectorgroups(operators, ed, sector₀)
     blocks = Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}[]
-    for (sector, ranks) in pairs(groups)
+    for (i, (sector, ranks)) in enumerate(pairs(groups))
+        @info "($i/$(length(groups))) sector $(Abelian(sector))"
         dimension(sector) > 0 || continue
         @timeit timer string(Abelian(sector)) begin
-            H = @timeit timer "matrix" sparse(ed, sector; timer=timer)
-            Xs = @timeit timer "operator matrices" map(a->matrix(ops′[a], (sector, sector₀), ed.matrixization.table, T; cached=true), ranks)
+            H = sparse(ed, sector; timer=timer)
+            @info "- matrix complete"
+            Xs = map(a->matrix(ops′[a], (sector, sector₀), ed.matrixization.table, T; cached=true), ranks)
             @timeit timer "poles" begin
                 W = [Xₐ*sample.φ for Xₐ in Xs]
                 Ẽ, Ψ̃ = resolve(H, W, method)
@@ -684,6 +692,7 @@ function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:Quantu
                 L, R, E = poles(Xs, sample.states, Ψ̃, Ẽ, sample.weights, sample.energies; kind=Symbol(kind), S̃=S̃)
                 push!(blocks, (L, R, E, ranks))
             end
+            @info "- poles complete"
         end
     end
     return GreenFunction(assemble(blocks, length(operators), T)...)
@@ -729,15 +738,15 @@ function GreenFunction(
     sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Retarded Green Function (exact, β=$(method.β))"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         @assert isnothing(E₀)==isnothing(U₀) "GreenFunction error: E₀ and U₀ must be provided together."
         if isnothing(sector₀)
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             sector₀ = only(eigensystem.sectors)
         end
         if isnothing(E₀)
-            E₀, U₀ = eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
+            E₀, U₀ = @timeit timer "spectrum" eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
             @info "- spectrum (sector₀) complete, dimension $(length(E₀))"
         end
         greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, kwargs...)
@@ -759,10 +768,10 @@ function GreenFunction(
     sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
-        @info "Retarded Green Function (β=$(method.β), R=$(method.nrandom))"
+        @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
             eigensystem = eigen(ed; nev=1, timer=timer, kwargs...)
-            @info "eigen complete"
+            @info "- eigen complete"
             e₀, sector₀ = only(eigensystem.values), only(eigensystem.sectors)
         end
         T = promote_type(scalartype(operators), scalartype(ed))

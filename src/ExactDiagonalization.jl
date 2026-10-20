@@ -14,7 +14,7 @@ using LinearAlgebra: I, Hermitian, norm, normalize!
 using LuxurySparse: SparseMatrixCOO
 using Mmap: mmap
 using Printf: @printf
-using QuantumLattices: efficientoperations, plain, azimuth, bonds, decompose, expand, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, str, totalspin
+using QuantumLattices: efficientoperations, plain, azimuth, bonds, decompose, expand, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, totalspin
 using QuantumLattices: 𝕊, AbstractLattice, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeDict, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Generator, Hilbert, Index, Internal, InternalIndex, LatticeModel, LinearTransformation, Matrixization, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorGenerator, OperatorIndex, OperatorIndexToTuple, OperatorPack, OperatorProd, Operators, OperatorSet, OperatorSum, Pairing, QuantumOperator, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceEnumerative, @delegate
 using Random: randn, seed!
 using Serialization: AbstractSerializer, Serialization
@@ -23,7 +23,7 @@ using TimerOutputs: TimerOutput, @timeit
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator, basis
 
 import LinearAlgebra: dot, eigen, mul!
-import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, update!, value
+import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, str, update!, value
 import Serialization: serialize, deserialize
 import SparseArrays: nnz, sparse
 
