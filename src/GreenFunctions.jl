@@ -42,6 +42,17 @@ Abstract type for the methods to compute Green's functions.
 abstract type GreenFunctionMethod end
 
 """
+    ntasks(method::GreenFunctionMethod) -> Int
+
+Get the number of parallel tasks over which the `GreenFunction` constructors distribute the independent computations of `method`.
+
+This requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect.
+
+The default is `1` (serial); [`BandLanczosMethod`](@ref) and [`ThermalSeedBandLanczosMethod`](@ref) carry it as a field that can be specified.
+"""
+@inline ntasks(::GreenFunctionMethod) = 1
+
+"""
     GreenFunction{T<:Number, V<:Real} <: Function
 
 Green function expressed as a sum of simple poles,
@@ -145,10 +156,15 @@ Construct a `GreenFunction` from the single amplitude matrix `Q`, equivalent to 
 """
     GreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::GreenFunctionKind, method::GreenFunctionMethod=BandLanczosMethod(); kwargs...)
 
-Construct a `GreenFunction` from a vector of quantum operators, an exact diagonalization algorithm, a kind marker ([`GreenFunctionKind`](@ref)), and a Green function method. The keyword arguments are passed to the underlying constructor.
+Construct a `GreenFunction` from a vector of quantum operators, an exact diagonalization algorithm, a kind marker ([`GreenFunctionKind`](@ref)), and a Green function method.
+
+The keyword arguments are passed to the underlying constructor.
+
+The default timer is `ed.timer` for the serial construction (`ntasks(method)==1`) and the disabled `notimer` for the parallel one.
 """
 @inline function GreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::GreenFunctionKind, method::GreenFunctionMethod=BandLanczosMethod(); kwargs...)
-    return GreenFunction(operators, ed.frontend, kind, method; timer=ed.timer, kwargs...)
+    timer = get(kwargs, :timer, ntasks(method)>1 ? notimer : ed.timer)
+    return GreenFunction(operators, ed.frontend, kind, method; timer=timer, kwargs...)
 end
 
 ## Zero-temperature Green functions
@@ -175,16 +191,20 @@ struct BandLanczosMethod{OQ<:Orthogonalizer, OR<:Orthogonalizer} <: GreenFunctio
     maxdim::Int
     orthᵣ::OQ
     orthₒ::OR
+    ntasks::Int
 end
 @inline function Base.show(io::IO, method::BandLanczosMethod)
-    print(io, "BandLanczosMethod(", method.tol, ", ", method.tolᵣ, ", ", method.keepvecs, ", ", method.maxdim, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
+    print(io, "BandLanczosMethod(", method.tol, ", ", method.tolᵣ, ", ", method.keepvecs, ", ", method.maxdim, ", ", method.orthᵣ, ", ", method.orthₒ, ", ", method.ntasks, ")")
 end
 @inline str(method::BandLanczosMethod) = "Lanczos, maxdim=$(method.maxdim)"
+@inline ntasks(method::BandLanczosMethod) = method.ntasks
+# `ntasks` affects only the task scheduling of the construction, not the results, so it must not enter the fingerprint.
+@inline contenttoconfig(method::BandLanczosMethod) = (method.tol, method.tolᵣ, method.keepvecs, method.maxdim, method.orthᵣ, method.orthₒ)
 
 """
     BandLanczosMethod(
         orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
-        tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200
+        tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200, ntasks::Integer=1
     )
 
 Construct a `BandLanczosMethod` for computing the zero-temperature Green function.
@@ -193,27 +213,43 @@ Construct a `BandLanczosMethod` for computing the zero-temperature Green functio
 - `orthₒ`: [`Orthogonalizer`](https://jutho.github.io/KrylovKit.jl/stable/man/algorithms/#KrylovKit.Orthogonalizer) used in `block_reorthogonalize!` for reorthogonalization against the Krylov basis during the Lanczos recurrence.
 - `tol`: Lanczos convergence tolerance — iteration stops when `normres < tol`.
 - `tolᵣ`: QR rank determination tolerance in `block_qr!` — a vector with norm < `tolᵣ` is considered numerically zero.
+- `ntasks`: number of parallel tasks over which the `GreenFunction` constructors distribute the independent target-sector computations (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect). The default `1` is serial; the parallel construction gives results identical to the serial one. Note that the peak memory usage grows with the number of concurrent tasks, and that the default timer of the parallel construction is the disabled `notimer` (`TimerOutput` is not thread-safe), so the per-sector progress messages may interleave.
 """
 @inline function BandLanczosMethod(
     orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
-    tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200
+    tol::Real=2e-8, tolᵣ::Real=1e-8, keepvecs::Bool=true, maxdim::Integer=200, ntasks::Integer=1
 )
-    return BandLanczosMethod(tol, tolᵣ, keepvecs, maxdim, orthᵣ, orthₒ)
+    @assert ntasks>=1 "BandLanczosMethod error: ntasks must be a positive integer."
+    return BandLanczosMethod(tol, tolᵣ, keepvecs, maxdim, orthᵣ, orthₒ, ntasks)
 end
+
+"""
+    with_ntasks(method::BandLanczosMethod, ntasks::Integer) -> BandLanczosMethod
+
+Rebuild `method` with a different number of parallel tasks, everything else preserved.
+
+Used internally to split the task budget among the concurrently constructed parts of a Green function.
+"""
+@inline with_ntasks(method::BandLanczosMethod, ntasks::Integer) = BandLanczosMethod(
+    method.orthᵣ, method.orthₒ; tol=method.tol, tolᵣ=method.tolᵣ, keepvecs=method.keepvecs, maxdim=method.maxdim, ntasks=ntasks
+)
 
 ### Zero-temperature greater/lesser Green function
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::Union{ExactMethod, BandLanczosMethod}=BandLanczosMethod();
-        e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct a zero-temperature `GreenFunction`, by full diagonalization of each target sector for `ExactMethod` and by the band Lanczos method for `BandLanczosMethod`.
+
+The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), with results identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the per-sector progress messages may interleave.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::Union{ExactMethod, BandLanczosMethod}=BandLanczosMethod();
-    e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
+    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
@@ -222,25 +258,32 @@ function GreenFunction(
             e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
         T = promote_type(scalartype(operators), scalartype(ed))
-        groups = sectorgroups(operators, ed, sector₀)
-        blocks = Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}[]
-        for (i, (sector, ranks)) in enumerate(pairs(groups))
-            @info "($i/$(length(groups))) sector $(Abelian(sector))"
-            if dimension(sector) > 0
+        groups = collect(pairs(sectorgroups(operators, ed, sector₀)))
+        blocks = Vector{Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}}(undef, length(groups))
+        # the `let` block rebinds `e₀`, `v₀` and `sector₀` (reassigned above) to fresh, non-boxed locals, as required by OhMyThreads
+        L, R, E = let e₀=e₀, v₀=v₀, sector₀=sector₀
+            function compute(i, (sector, ranks))
+                @info "($i/$(length(groups))) sector $(Abelian(sector))"
+                dimension(sector) > 0 || return
                 @timeit timer string(Abelian(sector)) begin
                     H = sparse(ed, sector; timer=timer)
                     @info "- matrix complete"
                     V = [matrix(adjoint(operators)[index], (sector, sector₀), ed.matrixization.table, T)*v₀ for index in ranks]
                     @timeit timer "poles" begin
                         Ẽ, S̃ = resolve(H, V, method)
-                        Lₚ, Rₚ, Eₚ = poles(S̃, S̃, Ẽ, 1.0, e₀; kind=Symbol(kind))
-                        push!(blocks, (Lₚ, Rₚ, Eₚ, ranks))
+                        blocks[i] = (poles(S̃, S̃, Ẽ, 1.0, e₀; kind=Symbol(kind))..., ranks)
                     end
                     @info "- poles complete"
                 end
+                return
             end
+            @tasks for i in eachindex(groups)
+                @set scheduler=ntasks(method)>1 ? :greedy : :serial
+                @set ntasks=min(ntasks(method), length(groups))
+                compute(i, groups[i])
+            end
+            assemble([block for block in blocks if !isnothing(block)], length(operators), T)
         end
-        L, R, E = assemble(blocks, length(operators), T)
         return GreenFunction(L, R, E)
     end
 end
@@ -317,7 +360,9 @@ end
         kind::Symbol=:greater
     ) -> (L, R, E)
 
-Assemble the poles of the resolvent for a **single** initial state with the given `weight` and reference energy `ref`, from the amplitudes `S̃[a, k] = ⟨seedₐ|ψ̃ₖ⟩` and `D̃[a, k] = ⟨probeₐ|ψ̃ₖ⟩` resolved against the (approximate) eigen pairs `{(Ẽ[k], ψ̃ₖ)}` of the target sector (see [`resolve`](@ref)). The pole at `k` has energy `±(Ẽ[k]-ref)` (`+` for `kind==:greater`, `-` otherwise) and left/right amplitudes
+Assemble the poles of the resolvent for a **single** initial state with the given `weight` and reference energy `ref`, from the amplitudes `S̃[a, k] = ⟨seedₐ|ψ̃ₖ⟩` and `D̃[a, k] = ⟨probeₐ|ψ̃ₖ⟩` resolved against the (approximate) eigen pairs `{(Ẽ[k], ψ̃ₖ)}` of the target sector (see [`resolve`](@ref)).
+
+The pole at `k` has energy `±(Ẽ[k]-ref)` (`+` for `kind==:greater`, `-` otherwise) and left/right amplitudes
 
 - `L[a, k] = weight * D̃[a, k]`, `R[a, k] = conj(S̃[a, k])` for `kind==:greater`;
 - `L[a, k] = weight * conj(S̃[a, k])`, `R[a, k] = D̃[a, k]` for `kind==:lesser`.
@@ -347,7 +392,9 @@ end
 """
     assemble(blocks, nops::Int, T) -> (L, R, E)
 
-Assemble the pole blocks of the sector groups into the full pole arrays of a `GreenFunction`. Each block is a tuple `(Lₚ, Rₚ, Eₚ, ranks)` with the poles of one sector group, where `ranks` are the global operator indices of the group and `nops` is the total number of operators.
+Assemble the pole blocks of the sector groups into the full pole arrays of a `GreenFunction`.
+
+Each block is a tuple `(Lₚ, Rₚ, Eₚ, ranks)` with the poles of one sector group, where `ranks` are the global operator indices of the group and `nops` is the total number of operators.
 """
 @inline function assemble(blocks, nops::Int, T)
     total_npoles = sum(block->length(block[3]), blocks; init=0)
@@ -369,15 +416,18 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::Union{BandLanczosMethod, ExactMethod}=BandLanczosMethod();
-        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct the zero-temperature retarded Green function as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which are constructed by the zero-temperature `GreenFunction` constructor with the same `method` ([`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref)) and share the same ground state.
+
+With `ntasks(method)>1`, the greater and lesser parts are constructed concurrently, each distributing its target-sector computations over up to `max(1, ntasks(method)÷2)` tasks; the results are identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe).
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::Union{BandLanczosMethod, ExactMethod}=BandLanczosMethod();
-    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
+    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
@@ -385,9 +435,17 @@ function GreenFunction(
             @info "- eigen complete"
             e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
-        greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
-        lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
-        return sign ? greater - lesser : greater + lesser
+        if ntasks(method) > 1
+            # the greater and lesser parts are constructed concurrently, splitting the task budget between them
+            method = with_ntasks(method, max(1, ntasks(method)÷2))
+            greater = OhMyThreads.@spawn GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            lesser = OhMyThreads.@spawn GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            return sign ? fetch(greater)-fetch(lesser) : fetch(greater)+fetch(lesser)
+        else
+            greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            return sign ? greater-lesser : greater+lesser
+        end
     end
 end
 
@@ -395,7 +453,9 @@ end
 """
     ThermalExactMethod <: GreenFunctionMethod
 
-Exact diagonalization method for the finite-temperature Green function. The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
+Exact diagonalization method for the finite-temperature Green function.
+
+The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
 
 Suitable for small Hilbert spaces and as the benchmark of [`ThermalSeedBandLanczosMethod`](@ref).
 """
@@ -412,21 +472,21 @@ end
 @inline str(method::ThermalExactMethod; ndecimal::Integer=14) = "thermal exact, β=$(str(method.β; ndecimal=ndecimal)), cutoff=$(str(method.cutoff; ndecimal=ndecimal))"
 
 """
-    ThermalExactMethod(β::Real; cutoff::Real=0.0)
     ThermalExactMethod(; β::Real, cutoff::Real=0.0)
 
-Construct a `ThermalExactMethod` for computing the finite-temperature Green function at inverse temperature `β` by exact diagonalization. The inverse temperature can be passed either positionally or as the keyword `β` (the latter matches [`ThermalSeedBandLanczosMethod`](@ref)).
+Construct a `ThermalExactMethod` for computing the finite-temperature Green function at inverse temperature `β` by exact diagonalization.
 
 - `β`: the inverse temperature.
 - `cutoff`: Boltzmann weight threshold (dimensionless). Only eigenstates with `exp(-β*(Eₙ-e₀))>=cutoff` are kept as initial states. The default `0.0` keeps all eigenstates (strictly exact).
 """
-@inline ThermalExactMethod(β::Real; cutoff::Real=0.0) = ThermalExactMethod(β, cutoff)
 @inline ThermalExactMethod(; β::Real, cutoff::Real=0.0) = ThermalExactMethod(β, cutoff)
 
 """
     ThermalSeedBandLanczosMethod{OQ<:Orthogonalizer, OR<:Orthogonalizer} <: GreenFunctionMethod
 
-Thermally-weighted seed band Lanczos method for the finite-temperature Green function (the Kokalj variant of the low-temperature Lanczos method). The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
+Thermally-weighted seed band Lanczos method for the finite-temperature Green function (the Kokalj variant of the low-temperature Lanczos method).
+
+The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
 
 For each of `nrandom` random vectors, a first Lanczos run prepares the approximate thermally-weighted pure state `|TPQ⟩=∑ₗexp(-βεₗ/2)⟨ψₗ|r⟩|ψₗ⟩` and a second band Lanczos run seeded by `A†|TPQ⟩` resolves the spectral function. Both runs keep the Krylov basis for full reorthogonalization.
 
@@ -443,16 +503,18 @@ struct ThermalSeedBandLanczosMethod{OQ<:Orthogonalizer, OR<:Orthogonalizer} <: G
     tolᵣ::Float64
     orthᵣ::OQ
     orthₒ::OR
+    ntasks::Int
     samples::Vector{<:GreenFunction}
 end
-@inline function ThermalSeedBandLanczosMethod(β, cutoff, nrandom, maxdim₁, maxdim₂, seed, tol, tolᵣ, orthᵣ::OQ, orthₒ::OR) where {OQ<:Orthogonalizer, OR<:Orthogonalizer}
-    return ThermalSeedBandLanczosMethod{OQ, OR}(β, cutoff, nrandom, maxdim₁, maxdim₂, seed, tol, tolᵣ, orthᵣ, orthₒ, GreenFunction[])
+@inline function ThermalSeedBandLanczosMethod(β, cutoff, nrandom, maxdim₁, maxdim₂, seed, tol, tolᵣ, orthᵣ::OQ, orthₒ::OR, ntasks) where {OQ<:Orthogonalizer, OR<:Orthogonalizer}
+    return ThermalSeedBandLanczosMethod{OQ, OR}(β, cutoff, nrandom, maxdim₁, maxdim₂, seed, tol, tolᵣ, orthᵣ, orthₒ, ntasks, GreenFunction[])
 end
 @inline function Base.show(io::IO, method::ThermalSeedBandLanczosMethod)
-    print(io, "ThermalSeedBandLanczosMethod(", method.β, ", ", method.cutoff, ", ", method.nrandom, ", ", method.maxdim₁, ", ", method.maxdim₂, ", ", method.seed, ", ", method.tol, ", ", method.tolᵣ, ", ", method.orthᵣ, ", ", method.orthₒ, ")")
+    print(io, "ThermalSeedBandLanczosMethod(", method.β, ", ", method.cutoff, ", ", method.nrandom, ", ", method.maxdim₁, ", ", method.maxdim₂, ", ", method.seed, ", ", method.tol, ", ", method.tolᵣ, ", ", method.orthᵣ, ", ", method.orthₒ, ", ", method.ntasks, ")")
 end
 @inline str(method::ThermalSeedBandLanczosMethod; ndecimal::Integer=14) = "thermal Lanczos, β=$(str(method.β; ndecimal=ndecimal)), cutoff=$(str(method.cutoff; ndecimal=ndecimal)), R=$(method.nrandom)"
-# For `ThermalSeedBandLanczosMethod`, the `samples` field is lazily filled at Green function construction, so it must not enter the fingerprint (a save would hash the filled one while a load would hash the empty one).
+@inline ntasks(method::ThermalSeedBandLanczosMethod) = method.ntasks
+# For `ThermalSeedBandLanczosMethod`, the `samples` field is lazily filled at Green function construction, so it must not enter the fingerprint (a save would hash the filled one while a load would hash the empty one); neither must `ntasks`, which affects only the task scheduling, not the results.
 @inline contenttoconfig(method::ThermalSeedBandLanczosMethod) = (
     method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ
 )
@@ -460,7 +522,7 @@ end
 """
     ThermalSeedBandLanczosMethod(
         orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
-        β::Real, cutoff::Real=1e-3, nrandom::Integer=10, maxdim₁::Integer=200, maxdim₂::Integer=200, seed::Integer=0, tol::Real=2e-8, tolᵣ::Real=1e-8
+        β::Real, cutoff::Real=1e-3, nrandom::Integer=10, maxdim₁::Integer=200, maxdim₂::Integer=200, seed::Integer=0, tol::Real=2e-8, tolᵣ::Real=1e-8, ntasks::Integer=1
     )
 
 Construct a `ThermalSeedBandLanczosMethod` for computing the finite-temperature Green function at inverse temperature `β`.
@@ -470,20 +532,47 @@ Construct a `ThermalSeedBandLanczosMethod` for computing the finite-temperature 
 - `nrandom`: number of random vectors.
 - `maxdim₁`: number of Lanczos iterations of the first (state-preparing) run.
 - `maxdim₂`: number of Lanczos iterations of the second (resolvent) run.
-- `seed`: seed of the random number generator for reproducibility; `0` means not reseeding. For fully deterministic results, pass `e₀` and `sector₀` explicitly to the constructors, otherwise they are recomputed each call by a Lanczos eigen solver with a random initial vector, which may flip the signs of some LAPACK eigenvectors in the poles (the Green function values are invariant under these sign flips).
+- `seed`: seed of the random number generator for reproducibility; `0` means not reseeding (truly random samples). For fully deterministic results, pass `e₀` and `sector₀` explicitly to the constructors, otherwise they are recomputed each call by a Lanczos eigen solver with a random initial vector, which may flip the signs of some LAPACK eigenvectors in the poles (the Green function values are invariant under these sign flips). An independent generator is derived from `(seed, r)` for the `r`-th random vector (see [`samplerngs`](@ref)), so for a nonzero seed the results are reproducible and identical for the serial and all parallel constructions.
 - `tol`: Lanczos convergence tolerance. Iteration stops when `normres < tol`.
 - `tolᵣ`: QR rank determination tolerance in `block_qr!`. A vector with norm < `tolᵣ` is considered numerically zero.
 - `orthᵣ`: [`Orthogonalizer`](https://jutho.github.io/KrylovKit.jl/stable/man/algorithms/#KrylovKit.Orthogonalizer) used in `block_qr!` for rank determination of initial and residual blocks.
 - `orthₒ`: [`Orthogonalizer`](https://jutho.github.io/KrylovKit.jl/stable/man/algorithms/#KrylovKit.Orthogonalizer) used in `block_reorthogonalize!` for reorthogonalization against the Krylov basis during the Lanczos recurrence.
+- `ntasks`: number of parallel tasks over which the `GreenFunction` constructors distribute the `nrandom` independent random-vector computations, with the sector computations within each sample nested over up to `max(1, ntasks÷min(ntasks, nrandom))` tasks (halved once more for the retarded construction, whose greater and lesser parts are also concurrent). The default `1` is serial; for a nonzero `seed`, the parallel results are reproducible and independent of the number of tasks. Note that the peak memory usage grows with the number of concurrent samples, and that the default timer of the parallel construction is the disabled `notimer` (`TimerOutput` is not thread-safe), so the progress messages may interleave.
 """
 @inline function ThermalSeedBandLanczosMethod(
     orthᵣ::Orthogonalizer=ModifiedGramSchmidt2(), orthₒ::Orthogonalizer=ModifiedGramSchmidt();
-    β::Real, cutoff::Real=1e-3, nrandom::Integer=10, maxdim₁::Integer=200, maxdim₂::Integer=200, seed::Integer=0, tol::Real=2e-8, tolᵣ::Real=1e-8
+    β::Real, cutoff::Real=1e-3, nrandom::Integer=10, maxdim₁::Integer=200, maxdim₂::Integer=200, seed::Integer=0, tol::Real=2e-8, tolᵣ::Real=1e-8, ntasks::Integer=1
 )
     @assert β>0 "ThermalSeedBandLanczosMethod error: inverse temperature β must be positive."
     @assert 0<=cutoff<=1 "ThermalSeedBandLanczosMethod error: cutoff accuracy cutoff must be in [0, 1]."
     @assert nrandom>0 "ThermalSeedBandLanczosMethod error: nrandom must be positive."
-    return ThermalSeedBandLanczosMethod(β, cutoff, nrandom, maxdim₁, maxdim₂, UInt64(seed), tol, tolᵣ, orthᵣ, orthₒ)
+    @assert ntasks>=1 "ThermalSeedBandLanczosMethod error: ntasks must be a positive integer."
+    return ThermalSeedBandLanczosMethod(β, cutoff, nrandom, maxdim₁, maxdim₂, UInt64(seed), tol, tolᵣ, orthᵣ, orthₒ, ntasks)
+end
+
+"""
+    with_ntasks(method::ThermalSeedBandLanczosMethod, ntasks::Integer) -> ThermalSeedBandLanczosMethod
+
+Rebuild `method` with a different number of parallel tasks, everything else preserved.
+
+Used internally to split the task budget among the concurrently constructed samples of a Green function.
+"""
+@inline function with_ntasks(method::ThermalSeedBandLanczosMethod, ntasks::Integer)
+    return ThermalSeedBandLanczosMethod(
+        method.orthᵣ, method.orthₒ; β=method.β, cutoff=method.cutoff, nrandom=method.nrandom, maxdim₁=method.maxdim₁, maxdim₂=method.maxdim₂, seed=method.seed, tol=method.tol, tolᵣ=method.tolᵣ, ntasks=ntasks
+    )
+end
+
+"""
+    samplerngs(method::ThermalSeedBandLanczosMethod) -> Vector{Xoshiro}
+
+Return the random number generators for the `method.nrandom` random vectors of the thermally-weighted seed method, one per sample; the `r`-th sample is drawn from `samplerngs(method)[r]`.
+
+The generators are derived from `method.seed` independently of the task scheduling: for a nonzero `method.seed`, the `r`-th generator is fully determined by `(method.seed, r)`, hence the results are reproducible and identical for the serial and all parallel constructions; for `method.seed==0`, the seeds are drawn from the global RNG, hence truly random.
+"""
+function samplerngs(method::ThermalSeedBandLanczosMethod)
+    master = method.seed==0 ? default_rng() : Xoshiro(method.seed)
+    return [Xoshiro(rand(master, UInt64)) for _ = 1:method.nrandom]
 end
 
 ## Finite-temperature greater/lesser Green functions
@@ -493,7 +582,9 @@ end
         E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
-Construct the finite-temperature Green function at inverse temperature `method.β` by exact method. The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
+Construct the finite-temperature Green function at inverse temperature `method.β` by exact method.
+
+The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
 
 - `E₀` and `U₀`: the optional precomputed spectrum (all eigen values and eigen vectors) of the ground-state sector, which must be provided together; reused as provided (e.g. shared between the two kinds by the `GreenFunctionKind(:retarded)` constructor), and computed internally by dense diagonalization of `sector₀` when absent.
 - `sector₀`: the ground-state sector; computed internally when absent. The Boltzmann weights are relative to its lowest eigen energy `E₀[1]`.
@@ -545,19 +636,24 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod;
-        e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
-Construct the finite-temperature Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method. The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
+Construct the finite-temperature Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method.
+
+The trace is taken over the ground-state sector only, i.e. the canonical ensemble with all conserved quantum numbers fixed to the ground-state sector's values.
 
 The Green functions of the individual random vectors are stored in `method.samples` for statistical analysis (overwritten at each construction).
 
 - `e₀`, `sector₀`: the ground-state energy and sector; recomputed each call when absent, by a Lanczos eigen solver with a random initial vector (see [`ThermalSeedBandLanczosMethod`](@ref) for the reproducibility implications).
+
+The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), and the sector computations within each sample over up to `max(1, ntasks(method)÷min(ntasks(method), method.nrandom))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod;
-    e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
+    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
@@ -567,26 +663,41 @@ function GreenFunction(
         end
         T = promote_type(scalartype(operators), scalartype(ed))
         H₀ = sparse(ed, sector₀; timer=timer)
-        method.seed≠0 && seed!(method.seed)
-        Z = zero(real(T))
-        raws = GreenFunction{T, real(T)}[]
-        empty!(method.samples)
-        for r = 1:method.nrandom
-            @info "random vector $r/$(method.nrandom)"
-            sample = ThermalSample(H₀, method, e₀; timer=timer)
-            Z += sample.z
-            raw = GreenFunction(sample, operators, ed, kind, method; sector₀=sector₀, timer=timer)
-            push!(raws, raw)
-            push!(method.samples, GreenFunction(raw.L./sample.z, raw.R, raw.E))
+        nt = ntasks(method)
+        rngs = samplerngs(method)
+        # the `let` block rebinds `e₀` and `sector₀` (reassigned above) to fresh, non-boxed locals, as required by OhMyThreads
+        let e₀=e₀, sector₀=sector₀
+            methodᵢ = with_ntasks(method, max(1, nt÷min(nt, method.nrandom)))
+            Zs = Vector{real(T)}(undef, method.nrandom)
+            raws = Vector{GreenFunction{T, real(T)}}(undef, method.nrandom)
+            empty!(method.samples)
+            resize!(method.samples, method.nrandom)
+            @tasks for r = 1:method.nrandom
+                @set scheduler=nt>1 ? :greedy : :serial
+                @set ntasks=min(nt, method.nrandom)
+                @info "random vector $r/$(method.nrandom)"
+                sample = ThermalSample(H₀, method, e₀; timer=timer, rng=rngs[r])
+                Zs[r] = sample.z
+                raw = GreenFunction(sample, operators, ed, kind, methodᵢ; sector₀=sector₀, timer=timer)
+                raws[r] = raw
+                method.samples[r] = GreenFunction(raw.L./sample.z, raw.R, raw.E)
+            end
+            Z = sum(Zs)
+            return GreenFunction(
+                mapreduce(r->r.L, hcat, raws)./Z,
+                mapreduce(r->r.R, hcat, raws),
+                mapreduce(r->r.E, vcat, raws)
+            )
         end
-        return GreenFunction(mapreduce(r->r.L, hcat, raws)./Z, mapreduce(r->r.R, hcat, raws), mapreduce(r->r.E, vcat, raws))
     end
 end
 
 """
     ThermalSample{T<:Number, V<:Real}
 
-The per-sample data of the first Lanczos run (thermal state preparation) of the thermally-weighted seed method (see [`ThermalSeedBandLanczosMethod`](@ref)) for a single random vector `|r⟩`, with `oᵢ = ⟨r|ψᵢ⟩` denoting the overlaps of the random vector with the Ritz states:
+The per-sample data of the first Lanczos run (thermal state preparation) of the thermally-weighted seed method (see [`ThermalSeedBandLanczosMethod`](@ref)) for a single random vector `|r⟩`.
+
+Let `oᵢ = ⟨r|ψᵢ⟩` denote the overlaps of the random vector with the Ritz states:
 
 - `φ::Vector{T}`: the thermally-weighted state `|φ⟩ = ∑ᵢ exp(-βεᵢ/2)conj(oᵢ)|ψᵢ⟩` (the TPQ state);
 - `energies::Vector{V}`: the Ritz energies `εᵢ` of the kept states (absolute energies);
@@ -607,12 +718,14 @@ struct ThermalSample{T<:Number, V<:Real}
 end
 
 """
-    ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer) -> ThermalSample
+    ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer, rng::AbstractRNG=default_rng()) -> ThermalSample
 
-Construct a `ThermalSample` for a **single** random vector of the thermally-weighted seed method, by running the first Lanczos (thermal state preparation) on the ground-state-sector Hamiltonian `H₀` with ground-state energy `e₀`. The random vector is drawn from the global RNG; call `seed!(method.seed)` before the sample loop for reproducibility.
+Construct a `ThermalSample` for a **single** random vector of the thermally-weighted seed method, by running the first Lanczos (thermal state preparation) on the ground-state-sector Hamiltonian `H₀` with ground-state energy `e₀`.
+
+The random vector is drawn from `rng`, which defaults to the global RNG; the `GreenFunction` constructors pass per-sample generators (see [`samplerngs`](@ref)).
 """
-function ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer)
-    rv = randn(eltype(H₀), size(H₀, 1))
+function ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLanczosMethod, e₀::Real; timer::TimerOutput=edtimer, rng::AbstractRNG=default_rng())
+    rv = randn(rng, eltype(H₀), size(H₀, 1))
     normalize!(rv)
     iter = BandLanczosIterator(H₀, Block([rv]), method.maxdim₁+1, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ; keepvecs=true)
     fact = initialize(iter)
@@ -648,7 +761,9 @@ end
         kind::Symbol=:greater, S̃::Union{Nothing, AbstractMatrix{<:Number}}=nothing
     ) -> (Lₚ, Rₚ, Eₚ)
 
-Assemble the pole block of one target sector over **all** kept initial states, calling the single-state [`poles`](@ref) for each. `states` stores the kept initial states as columns, `Ψ̃` and `Ẽ` are the (approximate) eigen vectors and energies of the target sector, and `weights`/`refs` give the per-state weights and reference energies. The probe vectors are formed one state at a time, so that the full set of probes is never materialized. The seed amplitudes default to `S̃ = D̃` per state (seeds identical to probes, e.g. [`ThermalExactMethod`](@ref)); pass a fixed `S̃` (the amplitudes against the thermally-weighted seeds) for [`ThermalSeedBandLanczosMethod`](@ref).
+Assemble the pole block of one target sector over **all** kept initial states, calling the single-state [`poles`](@ref) for each.
+
+`states` stores the kept initial states as columns, `Ψ̃` and `Ẽ` are the (approximate) eigen vectors and energies of the target sector, and `weights`/`refs` give the per-state weights and reference energies. The probe vectors are formed one state at a time, so that the full set of probes is never materialized. The seed amplitudes default to `S̃ = D̃` per state (seeds identical to probes, e.g. [`ThermalExactMethod`](@ref)); pass a fixed `S̃` (the amplitudes against the thermally-weighted seeds) for [`ThermalSeedBandLanczosMethod`](@ref).
 """
 function poles(Xs::AbstractVector{<:AbstractMatrix}, states::AbstractMatrix{<:Number}, Ψ̃::AbstractMatrix{<:Number}, Ẽ::AbstractVector{<:Real}, weights::AbstractVector{<:Number}, refs::AbstractVector{<:Real}; kind::Symbol=:greater, S̃::Union{Nothing, AbstractMatrix{<:Number}}=nothing)
     T = promote_type(eltype(eltype(Xs)), eltype(states), eltype(Ψ̃), eltype(weights))
@@ -668,18 +783,23 @@ function poles(Xs::AbstractVector{<:AbstractMatrix}, states::AbstractMatrix{<:Nu
 end
 
 """
-    GreenFunction(sample::ThermalSample, operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod; sector₀::Sector, timer::TimerOutput=edtimer) -> GreenFunction
+    GreenFunction(sample::ThermalSample, operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod; sector₀::Sector, timer::Union{TimerOutput, Nothing}=nothing) -> GreenFunction
 
-Construct the Green function for a **single** random vector (carried by `sample`) of the thermally-weighted seed method, in the mandatory ground-state sector `sector₀`. The operators are grouped by the sectors their adjoints map to from `sector₀` (see [`sectorgroups`](@ref)), and the Hamiltonian and operator matrices of each sector are constructed on the fly inside the loop (cheaply, via the disk caches). The constructed `GreenFunction` is **unnormalized** and serves as a data container: divide its `L` by `sample.z` for the Green function of the individual sample, or accumulate the poles over the samples and divide by the total partition function for the combined Green function.
+Construct the Green function for a **single** random vector (carried by `sample`) of the thermally-weighted seed method, in the mandatory ground-state sector `sector₀`.
+
+The operators are grouped by the sectors their adjoints map to from `sector₀` (see [`sectorgroups`](@ref)), and the Hamiltonian and operator matrices of each sector are constructed on the fly inside the loop (cheaply, via the disk caches). The constructed `GreenFunction` is **unnormalized** and serves as a data container: divide its `L` by `sample.z` for the Green function of the individual sample, or accumulate the poles over the samples and divide by the total partition function for the combined Green function.
+
+The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one.
 """
-function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod; sector₀::Sector, timer::TimerOutput=edtimer)
+function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod; sector₀::Sector, timer::Union{TimerOutput, Nothing}=nothing)
+    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     T = promote_type(scalartype(operators), scalartype(ed))
     ops′ = map(adjoint, operators)
-    groups = sectorgroups(operators, ed, sector₀)
-    blocks = Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}[]
-    for (i, (sector, ranks)) in enumerate(pairs(groups))
+    groups = collect(pairs(sectorgroups(operators, ed, sector₀)))
+    blocks = Vector{Tuple{Matrix{T}, Matrix{T}, Vector{real(T)}, Vector{Int}}}(undef, length(groups))
+    function compute(i, (sector, ranks))
         @info "($i/$(length(groups))) sector $(Abelian(sector))"
-        dimension(sector) > 0 || continue
+        dimension(sector) > 0 || return
         @timeit timer string(Abelian(sector)) begin
             H = sparse(ed, sector; timer=timer)
             @info "- matrix complete"
@@ -688,19 +808,26 @@ function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:Quantu
                 W = [Xₐ*sample.φ for Xₐ in Xs]
                 Ẽ, Ψ̃ = resolve(H, W, method)
                 S̃ = reduce(hcat, W)'*Ψ̃
-                L, R, E = poles(Xs, sample.states, Ψ̃, Ẽ, sample.weights, sample.energies; kind=Symbol(kind), S̃=S̃)
-                push!(blocks, (L, R, E, ranks))
+                blocks[i] = (poles(Xs, sample.states, Ψ̃, Ẽ, sample.weights, sample.energies; kind=Symbol(kind), S̃=S̃)..., ranks)
             end
             @info "- poles complete"
         end
+        return
     end
-    return GreenFunction(assemble(blocks, length(operators), T)...)
+    @tasks for i in eachindex(groups)
+        @set scheduler=ntasks(method)>1 ? :greedy : :serial
+        @set ntasks=min(ntasks(method), length(groups))
+        compute(i, groups[i])
+    end
+    return GreenFunction(assemble([block for block in blocks if !isnothing(block)], length(operators), T)...)
 end
 
 """
     resolve(H::AbstractMatrix{<:Number}, seeds::AbstractVector{<:AbstractVector{<:Number}}, method::ThermalSeedBandLanczosMethod) -> (Ẽ, Ψ̃)
 
-Run the second band Lanczos (resolvent resolution) of the thermally-weighted seed method, seeded by `seeds` (the operators acting on the thermally-weighted state), returning the Ritz values `Ẽ` and the Ritz vectors `Ψ̃` of `H` as columns of a dense matrix. The amplitudes against the individual initial states are **not** resolved here; they are computed afterwards from `Ψ̃`, one state at a time, so that the full set of probe vectors is never materialized. The Krylov basis is always kept, as required by the deferred resolution.
+Run the second band Lanczos (resolvent resolution) of the thermally-weighted seed method, seeded by `seeds` (the operators acting on the thermally-weighted state), returning the Ritz values `Ẽ` and the Ritz vectors `Ψ̃` of `H` as columns of a dense matrix.
+
+The amplitudes against the individual initial states are **not** resolved here; they are computed afterwards from `Ψ̃`, one state at a time, so that the full set of probe vectors is never materialized. The Krylov basis is always kept, as required by the deferred resolution.
 """
 function resolve(H::AbstractMatrix{<:Number}, seeds::AbstractVector{<:AbstractVector{<:Number}}, method::ThermalSeedBandLanczosMethod)
     maxdim = min(method.maxdim₂, size(H, 1))
@@ -750,22 +877,25 @@ function GreenFunction(
         end
         greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, kwargs...)
         lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, kwargs...)
-        return sign ? greater - lesser : greater + lesser
+        return sign ? greater-lesser : greater+lesser
     end
 end
 
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalSeedBandLanczosMethod;
-        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct the finite-temperature retarded Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method, as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which share the same per-sample data of the first Lanczos runs: each random vector is used for both parts (exactly paired), and the merged per-sample Green functions are stored in `method.samples`.
+
+The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); within each sample, the greater and lesser parts are constructed concurrently, each distributing its sector computations over up to `max(1, ntasks(method)÷(2*min(ntasks(method), method.nrandom)))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalSeedBandLanczosMethod;
-    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
+    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
@@ -775,25 +905,40 @@ function GreenFunction(
         end
         T = promote_type(scalartype(operators), scalartype(ed))
         H₀ = sparse(ed, sector₀; timer=timer)
-        method.seed≠0 && seed!(method.seed)
-        Z = zero(real(T))
-        gs = GreenFunction{T, real(T)}[]
-        ls = GreenFunction{T, real(T)}[]
-        empty!(method.samples)
-        for r = 1:method.nrandom
-            @info "random vector $r/$(method.nrandom)"
-            sample = ThermalSample(H₀, method, e₀; timer=timer)
-            Z += sample.z
-            g = GreenFunction(sample, operators, ed, GreenFunctionKind(:greater), method; sector₀=sector₀, timer=timer)
-            l = GreenFunction(sample, map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; sector₀=sector₀, timer=timer)
-            push!(gs, g)
-            push!(ls, l)
-            sg = GreenFunction(g.L./sample.z, g.R, g.E)
-            sl = GreenFunction(l.L./sample.z, l.R, l.E)
-            push!(method.samples, sign ? sg - sl : sg + sl)
+        nt = ntasks(method)
+        rngs = samplerngs(method)
+        # the `let` block rebinds `e₀` and `sector₀` (reassigned above) to fresh, non-boxed locals, as required by OhMyThreads
+        let e₀=e₀, sector₀=sector₀
+            methodᵢ = with_ntasks(method, max(1, nt÷(2*min(nt, method.nrandom))))
+            Zs = Vector{real(T)}(undef, method.nrandom)
+            gs = Vector{GreenFunction{T, real(T)}}(undef, method.nrandom)
+            ls = Vector{GreenFunction{T, real(T)}}(undef, method.nrandom)
+            empty!(method.samples)
+            resize!(method.samples, method.nrandom)
+            ops′ = map(adjoint, operators)
+            @tasks for r = 1:method.nrandom
+                @set scheduler=nt>1 ? :greedy : :serial
+                @set ntasks=min(nt, method.nrandom)
+                @info "random vector $r/$(method.nrandom)"
+                sample = ThermalSample(H₀, method, e₀; timer=timer, rng=rngs[r])
+                Zs[r] = sample.z
+                if nt > 1
+                    # the greater and lesser parts of each sample are constructed concurrently
+                    g = OhMyThreads.@spawn GreenFunction(sample, operators, ed, GreenFunctionKind(:greater), methodᵢ; sector₀=sector₀, timer=timer)
+                    l = OhMyThreads.@spawn GreenFunction(sample, ops′, ed, GreenFunctionKind(:lesser), methodᵢ; sector₀=sector₀, timer=timer)
+                    gs[r], ls[r] = fetch(g), fetch(l)
+                else
+                    gs[r] = GreenFunction(sample, operators, ed, GreenFunctionKind(:greater), method; sector₀=sector₀, timer=timer)
+                    ls[r] = GreenFunction(sample, ops′, ed, GreenFunctionKind(:lesser), method; sector₀=sector₀, timer=timer)
+                end
+                sg = GreenFunction(gs[r].L./sample.z, gs[r].R, gs[r].E)
+                sl = GreenFunction(ls[r].L./sample.z, ls[r].R, ls[r].E)
+                method.samples[r] = sign ? sg - sl : sg + sl
+            end
+            Z = sum(Zs)
+            greater = GreenFunction(mapreduce(g->g.L, hcat, gs)./Z, mapreduce(g->g.R, hcat, gs), mapreduce(g->g.E, vcat, gs))
+            lesser = GreenFunction(mapreduce(l->l.L, hcat, ls)./Z, mapreduce(l->l.R, hcat, ls), mapreduce(l->l.E, vcat, ls))
+            return sign ? greater-lesser : greater+lesser
         end
-        greater = GreenFunction(mapreduce(x->x.L, hcat, gs)./Z, mapreduce(x->x.R, hcat, gs), mapreduce(x->x.E, vcat, gs))
-        lesser = GreenFunction(mapreduce(x->x.L, hcat, ls)./Z, mapreduce(x->x.R, hcat, ls), mapreduce(x->x.E, vcat, ls))
-        return sign ? greater - lesser : greater + lesser
     end
 end

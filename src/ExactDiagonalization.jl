@@ -13,13 +13,14 @@ using KrylovKit: Block, ModifiedGramSchmidt, ModifiedGramSchmidt2, Orthogonalize
 using LinearAlgebra: I, Hermitian, norm, normalize!
 using LuxurySparse: SparseMatrixCOO
 using Mmap: mmap
+using OhMyThreads: OhMyThreads, @set, @tasks
 using Printf: @printf
 using QuantumLattices: efficientoperations, plain, azimuth, bonds, decompose, expand, idtype, indextype, internalindextype, iscreation, nneighbor, polar, reparameter, reset!, shape, statistics, totalspin
 using QuantumLattices: 𝕊, AbstractLattice, Algorithm, Assignment, Boundary, BrillouinZone, CategorizedGenerator, Combinations, CompositeDict, CompositeIndex, Data, DuplicatePermutations, Fock, FockIndex, Generator, Hilbert, Index, Internal, InternalIndex, LatticeModel, LinearTransformation, Matrixization, Neighbors, OneAtLeast, OneOrMore, Operator, OperatorGenerator, OperatorIndex, OperatorIndexToTuple, OperatorPack, OperatorProd, Operators, OperatorSet, OperatorSum, Pairing, QuantumOperator, ReciprocalSpace, ReciprocalZone, Spin, SpinIndex, Table, Term, VectorSpace, VectorSpaceDirectProducted, VectorSpaceDirectSummed, VectorSpaceEnumerative, @delegate
-using Random: randn, seed!
+using Random: AbstractRNG, Xoshiro, default_rng, randn, seed!
 using Serialization: AbstractSerializer, Serialization
 using SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, nonzeros, nzrange, rowvals, spzeros
-using TimerOutputs: TimerOutput, @timeit
+using TimerOutputs: TimerOutput, @timeit, disable_timer!
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator, basis
 
 import LinearAlgebra: dot, eigen, mul!
@@ -38,7 +39,7 @@ export DiskCache, DiskCSCMatrix, diskcache, diskcache!
 
 ## Core
 include("Core.jl")
-export edtimer, eigen, id, kind, matrix, normalize, prepare!, productable, release!, scalartype, sparse, sumable, update!
+export edtimer, eigen, id, kind, matrix, normalize, notimer, prepare!, productable, release!, scalartype, sparse, sumable, update!
 export ED, EDKind, EDMatrix, EDMatrixization, Sector
 
 ## BinaryBases
@@ -54,6 +55,7 @@ export partition
 include("GreenFunctions.jl")
 export GreenFunction, GreenFunctionKind, GreaterOrLesserKind
 export GreenFunctionMethod, BandLanczosMethod, ExactMethod, ThermalExactMethod, ThermalSeedBandLanczosMethod
+export ntasks
 
 ## Assignments
 include("Assignments.jl")

@@ -7,6 +7,14 @@ Default shared timer for all exact diagonalization methods.
 const edtimer = TimerOutput()
 
 """
+    const notimer = TimerOutput()
+
+Shared disabled timer for all exact diagonalization methods: the `@timeit` instrumentation against it is a no-op. It serves as the default timer of the parallel (`ntasks>1`) code paths, since `TimerOutput` is not thread-safe.
+"""
+const notimer = TimerOutput()
+disable_timer!(notimer)
+
+"""
     EDKind{K}
 
 Kind of the exact diagonalization method applied to a quantum lattice system.

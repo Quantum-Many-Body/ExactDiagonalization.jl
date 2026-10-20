@@ -10,51 +10,47 @@ import Plots
     method = ExactMethod()
     @test string(method) == "ExactMethod()"
     @test contenttoconfig(method) === method
+    @test ntasks(method) == 1
 
     method = BandLanczosMethod()
-    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
+    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt(), 1)"
     @test method.tol == 2e-8
     @test method.tolᵣ == 1e-8
     @test method.keepvecs == true
     @test method.maxdim == 200
     @test method.orthᵣ == ModifiedGramSchmidt2()
     @test method.orthₒ == ModifiedGramSchmidt()
-    @test contenttoconfig(method) === method
+    @test ntasks(method) == method.ntasks == 1
+    @test contenttoconfig(method) == (method.tol, method.tolᵣ, method.keepvecs, method.maxdim, method.orthᵣ, method.orthₒ)
+    @test_throws AssertionError BandLanczosMethod(ntasks=0)
 
     method = BandLanczosMethod(tol=1e-5, tolᵣ=1e-12, keepvecs=false, maxdim=100)
-    @test string(method) == "BandLanczosMethod(1.0e-5, 1.0e-12, false, 100, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
+    @test string(method) == "BandLanczosMethod(1.0e-5, 1.0e-12, false, 100, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt(), 1)"
     @test method.tol == 1e-5
     @test method.tolᵣ == 1e-12
     @test method.keepvecs == false
     @test method.maxdim == 100
 
     method = BandLanczosMethod(ModifiedGramSchmidt(), ModifiedGramSchmidt2())
-    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt(), KrylovKit.ModifiedGramSchmidt2())"
+    @test string(method) == "BandLanczosMethod(2.0e-8, 1.0e-8, true, 200, KrylovKit.ModifiedGramSchmidt(), KrylovKit.ModifiedGramSchmidt2(), 1)"
     @test method.orthᵣ == ModifiedGramSchmidt()
     @test method.orthₒ == ModifiedGramSchmidt2()
 
-    method = ThermalExactMethod(2.0)
+    method = ThermalExactMethod(β=2.0)
     @test string(method) == "ThermalExactMethod(2.0, 0.0)"
     @test method.β == 2.0
     @test method.cutoff == 0.0
     @test contenttoconfig(method) === method
+    @test ntasks(method) == 1
 
-    method = ThermalExactMethod(2.0; cutoff=0.1)
+    method = ThermalExactMethod(β=2.0; cutoff=0.1)
     @test string(method) == "ThermalExactMethod(2.0, 0.1)"
     @test method.cutoff == 0.1
-    @test_throws AssertionError ThermalExactMethod(-1.0)
-    @test_throws AssertionError ThermalExactMethod(1.0; cutoff=1.5)
-
-    # the keyword-β form (matching ThermalSeedBandLanczosMethod) is equivalent to the positional one
-    method = ThermalExactMethod(β=2.0)
-    @test string(method) == "ThermalExactMethod(2.0, 0.0)"
-    @test (method.β, method.cutoff) == (2.0, 0.0)
-    method = ThermalExactMethod(β=2.0; cutoff=0.1)
-    @test (method.β, method.cutoff) == (2.0, 0.1)
     @test_throws AssertionError ThermalExactMethod(β=-1.0)
+    @test_throws AssertionError ThermalExactMethod(β=1.0; cutoff=1.5)
 
     method = ThermalSeedBandLanczosMethod(β=2.0)
-    @test string(method) == "ThermalSeedBandLanczosMethod(2.0, 0.001, 10, 200, 200, 0, 2.0e-8, 1.0e-8, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt())"
+    @test string(method) == "ThermalSeedBandLanczosMethod(2.0, 0.001, 10, 200, 200, 0, 2.0e-8, 1.0e-8, KrylovKit.ModifiedGramSchmidt2(), KrylovKit.ModifiedGramSchmidt(), 1)"
     @test method.β == 2.0
     @test method.cutoff == 1e-3
     @test method.nrandom == 10
@@ -65,10 +61,12 @@ import Plots
     @test method.tolᵣ == 1e-8
     @test method.orthᵣ == ModifiedGramSchmidt2()
     @test method.orthₒ == ModifiedGramSchmidt()
+    @test ntasks(method) == method.ntasks == 1
     @test isempty(method.samples)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=0.0)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, cutoff=1.5)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, nrandom=0)
+    @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, ntasks=0)
     @test contenttoconfig(method) == (method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ)
 end
 
@@ -312,8 +310,8 @@ end
         end
         occ ./= Z
         n̄ = [occ[findfirst(==(e), εs)] for e in ε]
-        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β))
-        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β))
+        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β))
+        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β))
         for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
             @test isapprox(g_greater(ω), U*Diagonal((1 .- n̄)./(ω .- ε))*U'; atol=1e-8)
             @test isapprox(g_lesser(ω), U*Diagonal(n̄./(ω .- ε))*U'; atol=1e-8)
@@ -322,7 +320,7 @@ end
 
     # the retarded Green function of free fermions is temperature independent
     for β in (0.5, 2.0, 20.0)
-        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β); sign=false)
+        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=β); sign=false)
         for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
             @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=1e-8)
         end
@@ -344,8 +342,8 @@ end
     ε, U = eigen(Hermitian(matrix(tba).H))
     for β in (0.5, 2.0, 20.0)
         f = 1 ./ (1 .+ exp.(β .* ε))   # plain Fermi function (μ inside ε): exact for free fermions in the grand-canonical ensemble
-        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β))
-        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β))
+        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β))
+        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β))
         for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
             @test isapprox(g_greater(ω), U*Diagonal((1 .- f)./(ω .- ε))*U'; atol=1e-8)
             @test isapprox(g_lesser(ω), U*Diagonal(f./(ω .- ε))*U'; atol=1e-8)
@@ -368,15 +366,15 @@ end
     ωs = [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
 
     # the Boltzmann-weight cutoff truncates high-energy eigenstates
-    g_full = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(2.0))
-    g_cut = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(2.0; cutoff=1e-2))
+    g_full = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=2.0))
+    g_cut = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=2.0; cutoff=1e-2))
     @test count(g_cut) < count(g_full)
     for ω in ωs
         @test isapprox(g_cut(ω), g_full(ω); atol=0.05)
     end
 
     # T->0 is not degraded by the cutoff: only the ground state survives anyway
-    gT = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(200.0; cutoff=1e-2))
+    gT = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=200.0; cutoff=1e-2))
     g0 = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500))
     for ω in ωs
         @test isapprox(gT(ω), g0(ω); atol=1e-6)
@@ -400,10 +398,10 @@ end
     # statistical agreement with the exact method over a temperature grid, with the deviation bounded by 5 times the standard error of the mean estimated from the individual samples
     for β in (0.5, 1.0, 2.0, 5.0, 20.0)
         method = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-        g_exact = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β))
+        g_exact = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β))
         g_combined = GreenFunction(operators, ed, GreenFunctionKind(:greater), method)
         samples_g = copy(method.samples)
-        l_exact = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(β))
+        l_exact = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β))
         l_combined = GreenFunction(operators, ed, GreenFunctionKind(:lesser), method)
         samples_l = copy(method.samples)
         @test length(samples_g) == method.nrandom
@@ -419,10 +417,10 @@ end
     # correct T->0 degradation: a single random vector suffices
     g0 = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500))
     gT = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalSeedBandLanczosMethod(β=200.0, nrandom=1, maxdim₁=500, maxdim₂=500))
-    gE = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(200.0))
+    gE = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=200.0))
     l0 = GreenFunction(operators, ed, GreenFunctionKind(:lesser), BandLanczosMethod(maxdim=500))
     lT = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalSeedBandLanczosMethod(β=200.0, nrandom=1, maxdim₁=500, maxdim₂=500))
-    lE = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(200.0))
+    lE = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=200.0))
     for ω in ωs
         @test isapprox(gT(ω), g0(ω); atol=1e-6)
         @test isapprox(gE(ω), g0(ω); atol=1e-6)
@@ -432,9 +430,9 @@ end
 
     # the sampling error shrinks with the number of random vectors
     β, ω = 2.0, 0.5+0.05im
-    g_exact = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β))
+    g_exact = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β))
     errs = map((20, 40, 80, 160)) do nrandom
-        g = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalSeedBandLanczosMethod(β=β, nrandom=nrandom, seed=UInt64(1010), maxdim₁=500, maxdim₂=500))
+        g = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalSeedBandLanczosMethod(β=β, nrandom=nrandom, seed=UInt64(123), maxdim₁=500, maxdim₂=500))
         return norm(g(ω)-g_exact(ω))
     end
     @test all(errs[i+1]<=errs[i] for i in 1:length(errs)-1)
@@ -466,7 +464,7 @@ end
     # statistical agreement of the retarded Green function with the exact method over a temperature grid, with the deviation bounded by 5 times the standard error of the mean estimated from the individual (per-sample merged) samples
     for β in (0.5, 2.0, 20.0)
         method = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-        r_exact = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β))
+        r_exact = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=β))
         r_combined = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method)
         samples = copy(method.samples)
         @test length(samples) == method.nrandom
@@ -491,7 +489,7 @@ end
     # statistical agreement between the seed and exact methods on a spin chain (exercising the AbelianBases path)
     for β in (1.0, 5.0), kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser))
         method = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-        g_exact = GreenFunction(operators, ed, kind, ThermalExactMethod(β))
+        g_exact = GreenFunction(operators, ed, kind, ThermalExactMethod(β=β))
         g_combined = GreenFunction(operators, ed, kind, method)
         samples = copy(method.samples)
         @test length(samples) == method.nrandom
@@ -525,7 +523,7 @@ end
         @test isapprox(weight(gf), Id; atol=1e-8)
     end
     for β in (0.5, 2.0, 20.0)
-        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β))
+        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=β))
         @test isapprox(weight(gf), Id; atol=1e-10)
     end
 
@@ -538,4 +536,67 @@ end
     meanw = sum(ws)/length(ws)
     σ = sqrt(sum(w->sum(abs2, w-meanw), ws)/(length(ws)-1)/length(ws))
     @test maximum(abs.(weight(gf)-Id)) <= max(5σ, 0.05)
+end
+
+@testset "GreenFunction: parallel construction (ntasks>1)" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
+    lattice = Lattice(unitcell, (4,))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+    t = Hopping(:t, -1.0, 1)
+    U = Hubbard(:U, 4.0)
+    μ = Onsite(:μ, -U.value/2)
+    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, (t, U, μ), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    operators = mapreduce(vcat, hilbert) do pair
+        site, fock = pair
+        return [Index(site, fock[i]) for i=1:length(fock)÷2]
+    end
+    ωs = [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
+    eigensystem = eigen(ed; nev=1)
+    e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
+
+    # zero-temperature: the parallel sector construction is deterministic and matches the serial one
+    for kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser)), keepvecs in (false, true)
+        gs = GreenFunction(operators, ed, kind, BandLanczosMethod(maxdim=500; keepvecs=keepvecs); e₀=e₀, v₀=v₀, sector₀=sector₀)
+        gp = GreenFunction(operators, ed, kind, BandLanczosMethod(maxdim=500; keepvecs=keepvecs, ntasks=2); e₀=e₀, v₀=v₀, sector₀=sector₀)
+        @test gs == gp
+    end
+
+    # zero-temperature retarded: the greater/lesser parts are constructed concurrently
+    rs = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=500); e₀=e₀, v₀=v₀, sector₀=sector₀, sign=false)
+    rp = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=500; ntasks=2); e₀=e₀, v₀=v₀, sector₀=sector₀, sign=false)
+    @test rs == rp
+
+    # finite temperature: reproducible across runs, bitwise identical between the serial and parallel constructions for a nonzero seed, with statistical agreement against the exact method
+    method₁ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
+    method₂ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(12345), maxdim₁=500, maxdim₂=500, ntasks=2)
+    method₄ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(12345), maxdim₁=500, maxdim₂=500, ntasks=4)
+    gs = GreenFunction(operators, ed, GreenFunctionKind(:greater), method₁; e₀=e₀, sector₀=sector₀)
+    gp₁ = GreenFunction(operators, ed, GreenFunctionKind(:greater), method₂; e₀=e₀, sector₀=sector₀)
+    gp₂ = GreenFunction(operators, ed, GreenFunctionKind(:greater), method₄; e₀=e₀, sector₀=sector₀)
+    @test gs == gp₁ == gp₂
+    @test length(method₂.samples) == method₂.nrandom
+    g_exact = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=2.0))
+    for ω in ωs
+        samplesω = [sample(ω) for sample in method₂.samples]
+        meanω = sum(samplesω)/length(samplesω)
+        σ = sqrt(sum(sampleω->sum(abs2, sampleω-meanω), samplesω)/(length(samplesω)-1)/length(samplesω))
+        @test maximum(abs.(gp₁(ω)-g_exact(ω))) <= max(5σ, 0.05)
+    end
+
+    # finite-temperature retarded: nested parallelism over samples, parts and sectors
+    method₁ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(777), maxdim₁=500, maxdim₂=500)
+    method₂ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(777), maxdim₁=500, maxdim₂=500, ntasks=2)
+    method₄ = ThermalSeedBandLanczosMethod(β=2.0, nrandom=10, seed=UInt64(777), maxdim₁=500, maxdim₂=500, ntasks=4)
+    rs = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method₁; e₀=e₀, sector₀=sector₀, sign=false)
+    rp₁ = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method₂; e₀=e₀, sector₀=sector₀, sign=false)
+    rp₂ = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method₄; e₀=e₀, sector₀=sector₀, sign=false)
+    @test rs == rp₁ == rp₂
+    @test length(method₂.samples) == method₂.nrandom
+    r_exact = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=2.0))
+    for ω in ωs
+        samplesω = [sample(ω) for sample in method₂.samples]
+        meanω = sum(samplesω)/length(samplesω)
+        σ = sqrt(sum(sampleω->sum(abs2, sampleω-meanω), samplesω)/(length(samplesω)-1)/length(samplesω))
+        @test maximum(abs.(rp₁(ω)-r_exact(ω))) <= max(5σ, 0.05)
+    end
 end
