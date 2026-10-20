@@ -40,7 +40,6 @@ const GreaterOrLesserKind = Union{GreenFunctionKind{:greater}, GreenFunctionKind
 Abstract type for the methods to compute Green's functions.
 """
 abstract type GreenFunctionMethod end
-@inline contenttoconfig(method::GreenFunctionMethod) = method
 
 """
     GreenFunction{T<:Number, V<:Real} <: Function
