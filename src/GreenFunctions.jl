@@ -612,16 +612,16 @@ function ThermalSample(H₀::AbstractMatrix{<:Number}, method::ThermalSeedBandLa
     normalize!(rv)
     iter = BandLanczosIterator(H₀, Block([rv]), method.maxdim₁+1, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ; keepvecs=true)
     fact = initialize(iter)
-    ran = false
     @timeit timer "state preparation" with_logger(RawStderrLogger()) do
+        ran = false
         while length(fact) < method.maxdim₁ && normres(fact) > iter.tol
             progress = length(fact) / method.maxdim₁ * 100
             @info "\r[ Info: - state preparation $(round(progress, digits=1))% ($(length(fact))/$(method.maxdim₁))..."
             ran = true
             expand!(iter, fact)
         end
+        ran && @info "\n"
     end
-    ran && @info "\n"
     E, U = eigen(Hermitian(rayleighquotient(fact)))
     o = U[1, :]
     z = sum(abs2.(o) .* exp.(-method.β .* (E .- e₀)))
@@ -699,12 +699,15 @@ function resolve(H::AbstractMatrix{<:Number}, seeds::AbstractVector{<:AbstractVe
     iter = BandLanczosIterator(H, Block(deepcopy(seeds)), maxdim+length(seeds), method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ; keepvecs=true)
     fact = initialize(iter)
     with_logger(RawStderrLogger()) do
+        ran = false
         while length(fact) < maxdim && normres(fact) > iter.tol
             offset = length(fact)
             progress = offset / maxdim * 100
             @info "\r[ Info: - poles $(round(progress, digits=1))% ($offset/$maxdim)..."
+            ran = true
             expand!(iter, fact)
         end
+        ran && @info "\n"
     end
     ms = min(maxdim, length(fact))
     B = reduce(hcat, basis(fact)[1:ms])
