@@ -11,6 +11,7 @@
 Manifest.toml
 
 dev/
+benchmark/
 deps/deps.jl
 docs/build/
 docs/Manifest.toml

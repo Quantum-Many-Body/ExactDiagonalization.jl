@@ -95,12 +95,12 @@ end
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    another = ED(ed.frontend.system, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0))
-    eigensystem = eigen(ed, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
+    another = Algorithm(Symbol("two-site-copy"), ED(ed.frontend.system, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+    eigensystem = eigen(another, ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1)
     @test isapprox(eigensystem.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.vectors[1], -vector; atol=10^-10)
 
-    eigensystem = ed(:eigen, EDEigen(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1))
+    eigensystem = another(:eigen, EDEigen(ℕ(length(lattice)) ⊠ 𝕊ᶻ(0); nev=1))
     @test isapprox(eigensystem.data.values[1], -3.23606797749979; atol=10^-10)
     @test isapprox(eigensystem.data.vectors[1], vector; atol=10^-10) || isapprox(eigensystem.data.vectors[1], -vector; atol=10^-10)
 end
