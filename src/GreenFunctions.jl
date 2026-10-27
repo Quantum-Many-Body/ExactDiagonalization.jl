@@ -111,19 +111,69 @@ Count the number of poles contributing to a `GreenFunction`.
 
 Get the values of a `GreenFunction` at `ω`.
 """
-@inline (gf::GreenFunction)(ω::Number) = gf(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), ω)
+@inline (gf::GreenFunction)(ω::Number; kwargs...) = gf(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), ω; kwargs...)
 
 """
-    (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number) -> typeof(dest)
+    (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; scaled=nothing) -> typeof(dest)
 
-Get the values of a `GreenFunction` at `ω` and add the result to `dest`.
+Get the values of a `GreenFunction` at `ω` and overwrite `dest` with the result.
+
+The pole sum is evaluated as `L*Diagonal(inv.(ω.-E))*transpose(R)` using BLAS. For repeated evaluations, preallocated `scaled` (size `size(gf.L)`) can be supplied to reuse the workspace.
 """
-function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number)
-    for i = 1:rank(gf), j = 1:rank(gf)
-        for k in 1:count(gf)
-            dest[i, j] += gf.L[i, k] * gf.R[j, k] / (ω-gf.E[k])
+function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; scaled=nothing)
+    T = promote_type(eltype(gf), typeof(ω))
+    scaled = isnothing(scaled) ? Matrix{T}(undef, size(gf.L)) : scaled
+    @assert size(scaled) == size(gf.L) "GreenFunction error: mismatched workspace `scaled`."
+    @inbounds for k in eachindex(gf.E)
+        weight = inv(ω-gf.E[k])
+        for i in axes(gf.L, 1)
+            scaled[i, k] = gf.L[i, k]*weight
         end
     end
+    mul!(dest, scaled, transpose(gf.R), true, false)
+    return dest
+end
+
+"""
+    inv(gf::GreenFunction, ω::Number; kwargs...)
+
+Compute the inverse of a `GreenFunction` at `ω`, forwarding all workspace keywords to the in-place method.
+"""
+@inline Base.inv(gf::GreenFunction, ω::Number; kwargs...) = inv!(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), gf, ω; kwargs...)
+
+"""
+    inv!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; kwargs...)
+
+Compute the inverse of a `GreenFunction` at `ω` into `dest`, overwriting its previous contents. Workspace keywords are forwarded to `gf(dest,ω)`.
+"""
+function inv!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; kwargs...)
+    gf(dest, ω; kwargs...)
+    return inv!(lu!(dest))
+end
+
+"""
+    derivative(gf::GreenFunction, ω::Number; kwargs...)
+
+Compute the frequency derivative of a `GreenFunction` at `ω`, forwarding all workspace keywords to the in-place method.
+"""
+@inline derivative(gf::GreenFunction, ω::Number; kwargs...) = derivative!(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), gf, ω; kwargs...)
+
+"""
+    derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; scaled=nothing)
+
+Compute `∂G[i,j]/∂ω = -Σₖ L[i,k]R[j,k]/(ω-E[k])²` into `dest`, overwriting its previous contents. Preallocated `scaled` can be supplied to reuse the workspace.
+"""
+function derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; scaled=nothing)
+    T = promote_type(eltype(gf), typeof(ω))
+    scaled = isnothing(scaled) ? Matrix{T}(undef, size(gf.L)) : scaled
+    @assert size(scaled) == size(gf.L) "derivative! error: mismatched workspace `scaled`."
+    @inbounds for k in eachindex(gf.E)
+        weight = -inv((ω-gf.E[k])^2)
+        for i in axes(gf.L, 1)
+            scaled[i, k] = gf.L[i, k]*weight
+        end
+    end
+    mul!(dest, scaled, transpose(gf.R), true, false)
     return dest
 end
 

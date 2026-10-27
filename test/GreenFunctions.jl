@@ -1,4 +1,5 @@
 using ExactDiagonalization
+using ExactDiagonalization: derivative, derivative!
 using KrylovKit: ModifiedGramSchmidt, ModifiedGramSchmidt2
 using LinearAlgebra: Diagonal, Hermitian, I, dot, inv, norm, tr
 using QuantumLattices
@@ -68,6 +69,49 @@ import Plots
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, nrandom=0)
     @test_throws AssertionError ThermalSeedBandLanczosMethod(β=1.0, ntasks=0)
     @test contenttoconfig(method) == (method.β, method.cutoff, method.nrandom, method.maxdim₁, method.maxdim₂, method.seed, method.tol, method.tolᵣ, method.orthᵣ, method.orthₒ)
+end
+
+@testset "GreenFunction evaluation" begin
+    @test derivative === QuantumLattices.derivative
+    Lreal = [1.0 0.2 0.1 0.3; 0.1 1.2 0.2 0.1; 0.2 0.1 1.1 0.2]
+    Rreal = [1.1 0.1 0.2 0.1; 0.2 1.0 0.1 0.3; 0.1 0.2 1.3 0.1]
+    E = [-1.0, -0.2, 0.3, 1.4]
+    for (L, R) in ((Lreal, Rreal), (complex.(Lreal, 0.1.*Rreal), complex.(Rreal, -0.2.*Lreal)))
+        gf = GreenFunction(L, R, E)
+        for ω in (0.1, 0.1+0.05im)
+            expected = zeros(promote_type(eltype(gf), typeof(ω)), size(gf))
+            for i in 1:rank(gf), j in 1:rank(gf), p in 1:count(gf)
+                expected[i, j] += gf.L[i, p]*gf.R[j, p]/(ω-gf.E[p])
+            end
+            @test isapprox(gf(ω), expected; atol=1e-11)
+            initial = fill(eltype(expected)(0.125), size(gf))
+            dest = copy(initial)
+            @test gf(dest, ω) === dest
+            @test isapprox(dest, expected; atol=1e-11)
+            T = promote_type(eltype(gf), typeof(ω))
+            scaled = Matrix{T}(undef, size(L))
+            dest_workspace = copy(initial)
+            @test gf(dest_workspace, ω; scaled=scaled) === dest_workspace
+            @test isapprox(dest_workspace, expected; atol=1e-11)
+            @test isapprox(gf(ω; scaled=scaled), expected; atol=1e-11)
+            expected_inverse = inv(expected)
+            @test isapprox(inv(gf, ω), expected_inverse; atol=1e-11)
+            @test isapprox(inv(gf, ω; scaled=scaled), expected_inverse; atol=1e-11)
+            dest_inverse = fill(eltype(expected)(2), size(gf))
+            @test inv!(dest_inverse, gf, ω; scaled=scaled) === dest_inverse
+            @test isapprox(dest_inverse, expected_inverse; atol=1e-11)
+            expected_derivative = zeros(promote_type(eltype(gf), typeof(ω)), size(gf))
+            for i in 1:rank(gf), j in 1:rank(gf), p in 1:count(gf)
+                expected_derivative[i, j] -= gf.L[i, p]*gf.R[j, p]/(ω-gf.E[p])^2
+            end
+            @test isapprox(derivative(gf, ω), expected_derivative; atol=1e-11)
+            @test isapprox(derivative(gf, ω; scaled=scaled), expected_derivative; atol=1e-11)
+            dest_derivative = fill(eltype(expected)(2), size(gf))
+            @test derivative!(dest_derivative, gf, ω; scaled=scaled) === dest_derivative
+            @test isapprox(dest_derivative, expected_derivative; atol=1e-11)
+            @test_throws AssertionError gf(copy(initial), ω; scaled=zeros(T, 1, 1))
+        end
+    end
 end
 
 @testset "GreenFunction: comparison of all methods" begin

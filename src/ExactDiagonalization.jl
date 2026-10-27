@@ -10,7 +10,7 @@ using Base.Iterators: product
 using DataStructures: OrderedDict
 using HalfIntegers: HalfInt
 using KrylovKit: Block, ModifiedGramSchmidt, ModifiedGramSchmidt2, Orthogonalizer, eigsolve, expand!, initialize, normres, rayleighquotient
-using LinearAlgebra: I, Hermitian, norm, normalize!
+using LinearAlgebra: I, Hermitian, lu!, norm, normalize!
 using LuxurySparse: SparseMatrixCOO
 using Mmap: mmap
 using OhMyThreads: OhMyThreads, @set, @tasks
@@ -23,8 +23,8 @@ using SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, nonzeros, nzrange, ro
 using TimerOutputs: TimerOutput, @timeit, disable_timer!
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator, basis
 
-import LinearAlgebra: dot, eigen, mul!
-import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, str, update!, value
+import LinearAlgebra: dot, eigen, inv!, mul!
+import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, derivative, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, str, update!, value
 import Serialization: serialize, deserialize
 import SparseArrays: nnz, sparse
 
@@ -55,7 +55,7 @@ export partition
 include("GreenFunctions.jl")
 export GreenFunction, GreenFunctionKind, GreaterOrLesserKind
 export GreenFunctionMethod, BandLanczosMethod, ExactMethod, ThermalExactMethod, ThermalSeedBandLanczosMethod
-export ntasks
+export derivative, derivative!, inv!, ntasks
 
 ## Assignments
 include("Assignments.jl")
