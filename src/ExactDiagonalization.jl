@@ -24,7 +24,7 @@ using TimerOutputs: TimerOutput, @timeit, disable_timer!
 using .BandLanczos: BandLanczosFactorization, BandLanczosIterator, basis
 
 import LinearAlgebra: dot, eigen, inv!, mul!
-import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, derivative, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, str, update!, value
+import QuantumLattices: Metric, Parameters, VectorSpaceStyle, ⊗, ⊕, add!, contenttoconfig, decompose, dependencytypes, derivative, derivative!, dimension, getcontent, id, kind, matrix, options, parameternames, partition, period, periods, rank, run!, scalartype, showasleaf, showcontent, str, update!, value
 import Serialization: serialize, deserialize
 import SparseArrays: nnz, sparse
 
@@ -53,7 +53,7 @@ export partition
 
 ## GreenFunctions
 include("GreenFunctions.jl")
-export GreenFunction, GreenFunctionKind, GreaterOrLesserKind
+export GreenFunction, GreenFunctionInfo, GreenFunctionKind, GreaterOrLesserKind
 export GreenFunctionMethod, BandLanczosMethod, ExactMethod, ThermalExactMethod, ThermalSeedBandLanczosMethod
 export derivative, derivative!, inv!, ntasks
 

@@ -114,24 +114,32 @@ Get the values of a `GreenFunction` at `ω`.
 @inline (gf::GreenFunction)(ω::Number; kwargs...) = gf(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), ω; kwargs...)
 
 """
-    (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; scaled=nothing) -> typeof(dest)
+    (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; workspace=nothing) -> typeof(dest)
 
 Get the values of a `GreenFunction` at `ω` and overwrite `dest` with the result.
 
-The pole sum is evaluated as `L*Diagonal(inv.(ω.-E))*transpose(R)` using BLAS. For repeated evaluations, preallocated `scaled` (size `size(gf.L)`) can be supplied to reuse the workspace.
+The pole sum is evaluated as `L*Diagonal(inv.(ω.-E))*transpose(R)` using BLAS. For repeated evaluations, preallocated `workspace` (size `size(gf.L)`) can be supplied.
 """
-function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; scaled=nothing)
-    T = promote_type(eltype(gf), typeof(ω))
-    scaled = isnothing(scaled) ? Matrix{T}(undef, size(gf.L)) : scaled
-    @assert size(scaled) == size(gf.L) "GreenFunction error: mismatched workspace `scaled`."
+function (gf::GreenFunction)(dest::AbstractMatrix{<:Number}, ω::Number; workspace=nothing)
+    workspace = get_workspace(gf, ω, workspace, "GreenFunction")
     @inbounds for k in eachindex(gf.E)
         weight = inv(ω-gf.E[k])
         for i in axes(gf.L, 1)
-            scaled[i, k] = gf.L[i, k]*weight
+            workspace[i, k] = gf.L[i, k]*weight
         end
     end
-    mul!(dest, scaled, transpose(gf.R), true, false)
+    mul!(dest, workspace, transpose(gf.R), true, false)
     return dest
+end
+function get_workspace(gf, ω, workspace, context)
+    workspace = if isnothing(workspace)
+        T = promote_type(eltype(gf), typeof(ω))
+        Matrix{T}(undef, size(gf.L))
+    else
+        workspace
+    end
+    @assert size(workspace) == size(gf.L) "$context error: mismatched workspace."
+    return workspace
 end
 
 """
@@ -159,21 +167,19 @@ Compute the frequency derivative of a `GreenFunction` at `ω`, forwarding all wo
 @inline derivative(gf::GreenFunction, ω::Number; kwargs...) = derivative!(zeros(promote_type(typeof(ω), eltype(gf)), size(gf)), gf, ω; kwargs...)
 
 """
-    derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; scaled=nothing)
+    derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; workspace=nothing)
 
-Compute `∂G[i,j]/∂ω = -Σₖ L[i,k]R[j,k]/(ω-E[k])²` into `dest`, overwriting its previous contents. Preallocated `scaled` can be supplied to reuse the workspace.
+Compute `∂G[i,j]/∂ω = -Σₖ L[i,k]R[j,k]/(ω-E[k])²` into `dest`, overwriting its previous contents. Preallocated `workspace` can be supplied.
 """
-function derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; scaled=nothing)
-    T = promote_type(eltype(gf), typeof(ω))
-    scaled = isnothing(scaled) ? Matrix{T}(undef, size(gf.L)) : scaled
-    @assert size(scaled) == size(gf.L) "derivative! error: mismatched workspace `scaled`."
+function derivative!(dest::AbstractMatrix{<:Number}, gf::GreenFunction, ω::Number; workspace=nothing)
+    workspace = get_workspace(gf, ω, workspace, "derivative!")
     @inbounds for k in eachindex(gf.E)
         weight = -inv((ω-gf.E[k])^2)
         for i in axes(gf.L, 1)
-            scaled[i, k] = gf.L[i, k]*weight
+            workspace[i, k] = gf.L[i, k]*weight
         end
     end
-    mul!(dest, scaled, transpose(gf.R), true, false)
+    mul!(dest, workspace, transpose(gf.R), true, false)
     return dest
 end
 
@@ -215,6 +221,40 @@ The default timer is `ed.timer` for the serial construction (`ntasks(method)==1`
 @inline function GreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::GreenFunctionKind, method::GreenFunctionMethod=BandLanczosMethod(); kwargs...)
     timer = get(kwargs, :timer, ntasks(method)>1 ? notimer : ed.timer)
     return GreenFunction(operators, ed.frontend, kind, method; timer=timer, kwargs...)
+end
+
+"""
+    GreenFunctionInfo{T<:Real, S<:Sector}
+
+Thermodynamic information collected during a Green-function construction.
+
+`Z` is the partition function relative to the ground-state energy, `Ω` is the thermodynamic potential, and `sector₀` is the ground-state sector.
+
+Use the `callback` keyword of a `GreenFunction` constructor to receive this information once after a successful construction.
+"""
+struct GreenFunctionInfo{T<:Real, S<:Sector}
+    Z::T
+    Ω::T
+    sector₀::S
+end
+
+"""
+    GreenFunctionInfo(e₀::Real, sector₀::Sector) -> GreenFunctionInfo
+
+Construct zero-temperature information with `Z==1` and `Ω==e₀` where `e₀` is the ground-state energy.
+"""
+@inline GreenFunctionInfo(e₀::Real, sector₀::Sector) = GreenFunctionInfo(one(real(e₀)), e₀, sector₀)
+
+"""
+    GreenFunctionInfo(e₀::Real, Z::Real, sector₀::Sector, β::Real) -> GreenFunctionInfo
+
+Construct finite-temperature information with `Ω=e₀-log(Z)/β` where `e₀` is the ground-state energy and `β` is the inverse temperature.
+"""
+function GreenFunctionInfo(e₀::Real, Z::Real, sector₀::Sector, β::Real)
+    @assert Z>0 "GreenFunctionInfo error: Z must be positive."
+    @assert β>0 "GreenFunctionInfo error: β must be positive."
+    T = promote_type(typeof(e₀), typeof(Z), typeof(β))
+    return GreenFunctionInfo(T(Z), T(e₀-log(Z)/β), sector₀)
 end
 
 ## Zero-temperature Green functions
@@ -288,16 +328,18 @@ Used internally to split the task budget among the concurrently constructed part
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::Union{ExactMethod, BandLanczosMethod}=BandLanczosMethod();
-        e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+        e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct a zero-temperature `GreenFunction`, by full diagonalization of each target sector for `ExactMethod` and by the band Lanczos method for `BandLanczosMethod`.
 
 The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), with results identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the per-sector progress messages may interleave.
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. At zero temperature, `Ω==e₀` and `Z==1`.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::Union{ExactMethod, BandLanczosMethod}=BandLanczosMethod();
-    e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+    e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
     timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
@@ -334,7 +376,9 @@ function GreenFunction(
             end
             assemble([block for block in blocks if !isnothing(block)], length(operators), T)
         end
-        return GreenFunction(L, R, E)
+        result = GreenFunction(L, R, E)
+        !isnothing(callback) && callback(GreenFunctionInfo(e₀, sector₀))
+        return result
     end
 end
 
@@ -466,16 +510,18 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::Union{BandLanczosMethod, ExactMethod}=BandLanczosMethod();
-        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct the zero-temperature retarded Green function as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which are constructed by the zero-temperature `GreenFunction` constructor with the same `method` ([`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref)) and share the same ground state.
 
 With `ntasks(method)>1`, the greater and lesser parts are constructed concurrently, each distributing its target-sector computations over up to `max(1, ntasks(method)÷2)` tasks; the results are identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe).
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. At zero temperature, `Ω==e₀` and `Z==1`.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::Union{BandLanczosMethod, ExactMethod}=BandLanczosMethod();
-    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
     timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
@@ -485,17 +531,21 @@ function GreenFunction(
             @info "- eigen complete"
             e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
         end
-        if ntasks(method) > 1
+        T = promote_type(scalartype(operators), scalartype(ed))
+        info = Ref{GreenFunctionInfo{real(T), typeof(sector₀)}}()
+        result = if ntasks(method) > 1
             # the greater and lesser parts are constructed concurrently, splitting the task budget between them
             method = with_ntasks(method, max(1, ntasks(method)÷2))
-            greater = OhMyThreads.@spawn GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            greater = OhMyThreads.@spawn GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, callback=x->(info[]=x), kwargs...)
             lesser = OhMyThreads.@spawn GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
-            return sign ? fetch(greater)-fetch(lesser) : fetch(greater)+fetch(lesser)
+            sign ? fetch(greater)-fetch(lesser) : fetch(greater)+fetch(lesser)
         else
-            greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
+            greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, callback=x->(info[]=x), kwargs...)
             lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; e₀=e₀, v₀=v₀, sector₀=sector₀, timer=timer, kwargs...)
-            return sign ? greater-lesser : greater+lesser
+            sign ? greater-lesser : greater+lesser
         end
+        !isnothing(callback) && callback(info[])
+        return result
     end
 end
 
@@ -629,7 +679,7 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalExactMethod;
-        E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct the finite-temperature Green function at inverse temperature `method.β` by exact method.
@@ -638,10 +688,12 @@ The trace is taken over the ground-state sector only, i.e. the canonical ensembl
 
 - `E₀` and `U₀`: the optional precomputed spectrum (all eigen values and eigen vectors) of the ground-state sector, which must be provided together; reused as provided (e.g. shared between the two kinds by the `GreenFunctionKind(:retarded)` constructor), and computed internally by dense diagonalization of `sector₀` when absent.
 - `sector₀`: the ground-state sector; computed internally when absent. The Boltzmann weights are relative to its lowest eigen energy `E₀[1]`.
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is the finite-temperature thermodynamic potential.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalExactMethod;
-    E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
@@ -655,7 +707,7 @@ function GreenFunction(
             E₀, U₀ = @timeit timer "spectrum" eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
             @info "- spectrum (sector₀) complete, dimension $(length(E₀))"
         end
-        e₀ = E₀[1]
+        e₀ = first(E₀)
         w = @. exp(-method.β*(E₀-e₀))
         keep = findall(>=(method.cutoff), w)
         @assert length(keep)>0 "GreenFunction error: no eigenstate survives the Boltzmann weight threshold (cutoff=$(method.cutoff))."
@@ -680,13 +732,16 @@ function GreenFunction(
             end
         end
         L, R, E = assemble(blocks, length(operators), T)
-        return GreenFunction(L, R, E)
+        result = GreenFunction(L, R, E)
+        !isnothing(callback) && callback(GreenFunctionInfo(e₀, Z, sector₀, method.β))
+        return result
     end
 end
+
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod;
-        e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+        e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct the finite-temperature Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method.
@@ -698,10 +753,12 @@ The Green functions of the individual random vectors are stored in `method.sampl
 - `e₀`, `sector₀`: the ground-state energy and sector; recomputed each call when absent, by a Lanczos eigen solver with a random initial vector (see [`ThermalSeedBandLanczosMethod`](@ref) for the reproducibility implications).
 
 The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), and the sector computations within each sample over up to `max(1, ntasks(method)÷min(ntasks(method), method.nrandom))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is estimated from the same random samples.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod;
-    e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+    e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
     timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
@@ -733,11 +790,13 @@ function GreenFunction(
                 method.samples[r] = GreenFunction(raw.L./sample.z, raw.R, raw.E)
             end
             Z = sum(Zs)
-            return GreenFunction(
+            result = GreenFunction(
                 mapreduce(r->r.L, hcat, raws)./Z,
                 mapreduce(r->r.R, hcat, raws),
                 mapreduce(r->r.E, vcat, raws)
             )
+            !isnothing(callback) && callback(GreenFunctionInfo(e₀, dimension(sector₀)*Z/method.nrandom, sector₀, method.β))
+            return result
         end
     end
 end
@@ -904,14 +963,16 @@ end
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalExactMethod;
-        sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+        sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::TimerOutput=edtimer, kwargs...
     )
 
 Construct the finite-temperature retarded Green function at inverse temperature `method.β` by the exact method, as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which share the same ground-state sector spectrum: computed internally, or reused from `E₀` and `U₀` provided together.
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is the finite-temperature thermodynamic potential.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalExactMethod;
-    sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::TimerOutput=edtimer, kwargs...
+    sign::Bool=false, E₀::Union{AbstractVector{<:Real}, Nothing}=nothing, U₀::Union{AbstractMatrix{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::TimerOutput=edtimer, kwargs...
 )
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
@@ -925,25 +986,31 @@ function GreenFunction(
             E₀, U₀ = @timeit timer "spectrum" eigen(Hermitian(collect(sparse(ed, sector₀; timer=timer))))
             @info "- spectrum (sector₀) complete, dimension $(length(E₀))"
         end
-        greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, kwargs...)
+        T = promote_type(scalartype(operators), scalartype(ed))
+        info = Ref{GreenFunctionInfo{promote_type(real(T), typeof(method.β)), typeof(sector₀)}}()
+        greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, callback=x->(info[]=x), kwargs...)
         lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), method; E₀=E₀, U₀=U₀, sector₀=sector₀, timer=timer, kwargs...)
-        return sign ? greater-lesser : greater+lesser
+        result = sign ? greater-lesser : greater+lesser
+        !isnothing(callback) && callback(info[])
+        return result
     end
 end
 
 """
     GreenFunction(
         operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalSeedBandLanczosMethod;
-        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+        sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
     )
 
 Construct the finite-temperature retarded Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method, as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which share the same per-sample data of the first Lanczos runs: each random vector is used for both parts (exactly paired), and the merged per-sample Green functions are stored in `method.samples`.
 
 The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); within each sample, the greater and lesser parts are constructed concurrently, each distributing its sector computations over up to `max(1, ntasks(method)÷(2*min(ntasks(method), method.nrandom)))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
+
+When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is estimated from the same random samples.
 """
 function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalSeedBandLanczosMethod;
-    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
+    sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing,timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
     timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
     @timeit timer string(kind) begin
@@ -988,7 +1055,9 @@ function GreenFunction(
             Z = sum(Zs)
             greater = GreenFunction(mapreduce(g->g.L, hcat, gs)./Z, mapreduce(g->g.R, hcat, gs), mapreduce(g->g.E, vcat, gs))
             lesser = GreenFunction(mapreduce(l->l.L, hcat, ls)./Z, mapreduce(l->l.R, hcat, ls), mapreduce(l->l.E, vcat, ls))
-            return sign ? greater-lesser : greater+lesser
+            result = sign ? greater-lesser : greater+lesser
+            !isnothing(callback) && callback(GreenFunctionInfo(e₀, dimension(sector₀)*Z/method.nrandom, sector₀, method.β))
+            return result
         end
     end
 end

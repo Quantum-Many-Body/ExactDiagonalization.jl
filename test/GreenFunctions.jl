@@ -73,6 +73,7 @@ end
 
 @testset "GreenFunction evaluation" begin
     @test derivative === QuantumLattices.derivative
+    @test derivative! === QuantumLattices.derivative!
     Lreal = [1.0 0.2 0.1 0.3; 0.1 1.2 0.2 0.1; 0.2 0.1 1.1 0.2]
     Rreal = [1.1 0.1 0.2 0.1; 0.2 1.0 0.1 0.3; 0.1 0.2 1.3 0.1]
     E = [-1.0, -0.2, 0.3, 1.4]
@@ -89,27 +90,27 @@ end
             @test gf(dest, ω) === dest
             @test isapprox(dest, expected; atol=1e-11)
             T = promote_type(eltype(gf), typeof(ω))
-            scaled = Matrix{T}(undef, size(L))
+            workspace = Matrix{T}(undef, size(L))
             dest_workspace = copy(initial)
-            @test gf(dest_workspace, ω; scaled=scaled) === dest_workspace
+            @test gf(dest_workspace, ω; workspace=workspace) === dest_workspace
             @test isapprox(dest_workspace, expected; atol=1e-11)
-            @test isapprox(gf(ω; scaled=scaled), expected; atol=1e-11)
+            @test isapprox(gf(ω; workspace=workspace), expected; atol=1e-11)
             expected_inverse = inv(expected)
             @test isapprox(inv(gf, ω), expected_inverse; atol=1e-11)
-            @test isapprox(inv(gf, ω; scaled=scaled), expected_inverse; atol=1e-11)
+            @test isapprox(inv(gf, ω; workspace=workspace), expected_inverse; atol=1e-11)
             dest_inverse = fill(eltype(expected)(2), size(gf))
-            @test inv!(dest_inverse, gf, ω; scaled=scaled) === dest_inverse
+            @test inv!(dest_inverse, gf, ω; workspace=workspace) === dest_inverse
             @test isapprox(dest_inverse, expected_inverse; atol=1e-11)
             expected_derivative = zeros(promote_type(eltype(gf), typeof(ω)), size(gf))
             for i in 1:rank(gf), j in 1:rank(gf), p in 1:count(gf)
                 expected_derivative[i, j] -= gf.L[i, p]*gf.R[j, p]/(ω-gf.E[p])^2
             end
             @test isapprox(derivative(gf, ω), expected_derivative; atol=1e-11)
-            @test isapprox(derivative(gf, ω; scaled=scaled), expected_derivative; atol=1e-11)
+            @test isapprox(derivative(gf, ω; workspace=workspace), expected_derivative; atol=1e-11)
             dest_derivative = fill(eltype(expected)(2), size(gf))
-            @test derivative!(dest_derivative, gf, ω; scaled=scaled) === dest_derivative
+            @test derivative!(dest_derivative, gf, ω; workspace=workspace) === dest_derivative
             @test isapprox(dest_derivative, expected_derivative; atol=1e-11)
-            @test_throws AssertionError gf(copy(initial), ω; scaled=zeros(T, 1, 1))
+            @test_throws AssertionError gf(copy(initial), ω; workspace=zeros(T, 1, 1))
         end
     end
 end
@@ -325,6 +326,67 @@ end
     end
     Plots.savefig(Plots.plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Plots-Heisenberg-1d-20-spectral.png")
     Makie.save("Makie-Heisenberg-1d-20-spectral.png", Makie.plot(path, es, log.(1 .+ spectral)))
+end
+
+@testset "GreenFunctionInfo and callback" begin
+    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
+    lattice = Lattice(unitcell, (4,))
+    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+    qn = ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)
+    t = Hopping(:t, -1.0, 1)
+    ed = Algorithm(Symbol("1D"), ED(lattice, hilbert, t, qn))
+    operators = mapreduce(vcat, hilbert) do pair
+        site, fock = pair
+        return [Index(site, fock[i]) for i=1:length(fock)÷2]
+    end
+    sector₀ = only(eigen(ed; nev=1).sectors)
+    spectrum = eigen(Hermitian(collect(sparse(ed.frontend, sector₀)))).values
+    β = 2.0
+    expected_e₀ = first(spectrum)
+    weights = @. exp(-β*(spectrum-expected_e₀))
+    expected_Z = sum(weights)
+    expected_Ω = expected_e₀-log(expected_Z)/β
+    methods = (
+        ExactMethod(), BandLanczosMethod(maxdim=64),
+        ThermalExactMethod(β=β, cutoff=0.9),
+        ThermalSeedBandLanczosMethod(β=β, cutoff=0.9, nrandom=3, maxdim₁=40, maxdim₂=64, seed=UInt64(1234)),
+    )
+    for method in methods
+        received, calls = nothing, 0
+        callback = function (info)
+            received = info
+            calls += 1
+        end
+        GreenFunction(operators, ed, GreenFunctionKind(:retarded), method; callback)
+        @test calls == 1
+        @test received isa GreenFunctionInfo{typeof(expected_e₀), typeof(sector₀)}
+        @test Abelian(received.sector₀) == qn
+        @test dimension(received.sector₀) == length(spectrum)
+        if method isa ThermalSeedBandLanczosMethod
+            @test received.Z > 0
+            @test received.Z ≈ expected_Z atol=0.05
+            @test received.Ω ≈ expected_Ω atol=0.05
+        elseif method isa ThermalExactMethod
+            @test received.Z ≈ expected_Z
+            @test received.Ω ≈ expected_Ω
+        else
+            @test received.Z == 1
+            @test received.Ω ≈ expected_e₀
+        end
+        for kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser))
+            direct_info, direct_calls = nothing, 0
+            callback = function (info)
+                direct_info = info
+                direct_calls += 1
+            end
+            ops = Symbol(kind)==:greater ? operators : map(adjoint, operators)
+            GreenFunction(ops, ed, kind, method; callback)
+            @test direct_calls == 1
+            @test direct_info.Z ≈ received.Z
+            @test direct_info.Ω ≈ received.Ω
+            @test Abelian(direct_info.sector₀) == Abelian(received.sector₀)
+        end
+    end
 end
 
 @testset "ThermalExactMethod: free fermion vs TBA" begin
