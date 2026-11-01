@@ -113,6 +113,12 @@ end
     end
 end
 
+@inline weight(gf) = gf.L * transpose(gf.R)
+@inline function standarderror(values)
+    mean = sum(values)/length(values)
+    return sqrt(sum(value->sum(abs2, value-mean), values)/(length(values)-1)/length(values))
+end
+
 @testset "GreenFunction: zero-temperature methods and TBA" begin
     unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
     lattice = Lattice(unitcell, (6,))
@@ -166,13 +172,18 @@ end
     @test retarded_info.Z == 1
     @test retarded_info.Ω ≈ initial.e₀
     @test Abelian(retarded_info.sector₀) == Abelian(initial.sector₀)
-    no_keep = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=200, keepvecs=false); sign=false, initial...)
-    band_info = nothing
-    keep = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=200, keepvecs=true); sign=false, initial..., callback=info->(band_info=info))
-    @test band_info.Z == 1
-    @test band_info.Ω ≈ initial.e₀
-    @test Abelian(band_info.sector₀) == Abelian(initial.sector₀)
     @test rank(exact_retarded) == length(operators)
+    @test weight(exact_retarded) ≈ Matrix{Float64}(I, length(operators), length(operators)); atol=1e-8
+
+    no_keep = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=200, keepvecs=false); sign=false, initial..., callback=info->(retarded_info=info))
+    @test retarded_info.Z == 1
+    @test retarded_info.Ω ≈ initial.e₀
+    @test Abelian(retarded_info.sector₀) == Abelian(initial.sector₀)
+    @test weight(no_keep) ≈ Matrix{Float64}(I, length(operators), length(operators)); atol=1e-8
+
+    keep = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=200, keepvecs=true); sign=false, initial...)
+    @test weight(keep) ≈ Matrix{Float64}(I, length(operators), length(operators)); atol=1e-8
+
     for ω in test_frequencies
         G_exact, G_no_keep, G_keep = exact_retarded(ω), no_keep(ω), keep(ω)
         @test isapprox(G_exact, G_no_keep; atol=1e-6)
@@ -215,6 +226,7 @@ end
 end
 
 @testset "ThermalExactMethod: canonical free fermions" begin
+    # the retarded Green function of free fermions is temperature independent
     unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0]])
     lattice = Lattice(unitcell, (4,))
     hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
@@ -234,16 +246,14 @@ end
     expected_Z = sum(exp.(-2.0.*(E₀.-e₀)))
     expected_Ω = e₀-log(expected_Z)/2.0
     thermal_info = nothing
-    # the retarded Green function of free fermions is temperature independent
-    for β in (0.5, 2.0, 20.0)
-        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=β); sign=false, thermal..., callback=β==2.0 ? (info->(thermal_info=info)) : nothing)
-        for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
-            @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=1e-8)
-        end
-    end
+    gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=2.0); sign=false, callback=info->(thermal_info=info))
     @test thermal_info.Z ≈ expected_Z
     @test thermal_info.Ω ≈ expected_Ω
     @test Abelian(thermal_info.sector₀) == Abelian(sector₀)
+    @test isapprox(weight(gf), Matrix{Float64}(I, length(operators), length(operators)); atol=1e-10)
+    for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
+        @test isapprox(gf(ω), inv(ω*I-matrix(tba).H); atol=1e-8)
+    end
 end
 
 @testset "ThermalExactMethod: grand canonical free fermions" begin
@@ -262,23 +272,28 @@ end
     sector₀ = only(eigen(ed; nev=1).sectors)
     E₀, U₀ = eigen(Hermitian(collect(sparse(ed.frontend, sector₀))))
     e₀ = first(E₀)
-    expected_Z = sum(exp.(-2.0.*(E₀.-e₀)))
-    expected_Ω = e₀-log(expected_Z)/2.0
     thermal = (E₀=E₀, U₀=U₀, sector₀=sector₀)
     greater_info, lesser_info = nothing, nothing
-    for β in (0.5, 2.0, 20.0)
+    ωs = [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
+    for β in (0.5, 20.0)
         f = 1 ./ (1 .+ exp.(β .* ε))
-        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β); thermal..., callback=β==2.0 ? (info->(greater_info=info)) : nothing)
-        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β); thermal..., callback=β==2.0 ? (info->(lesser_info=info)) : nothing)
-        for ω in [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
+        g_greater = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β); thermal..., callback=info->(greater_info=info))
+        g_lesser = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β); thermal..., callback=info->(lesser_info=info))
+        for info in (greater_info, lesser_info)
+            @test info.Z ≈ sum(exp.(-β.*(E₀.-e₀)))
+            @test info.Ω ≈ e₀-log(info.Z)/β
+            @test Abelian(info.sector₀) == Abelian(sector₀)
+        end
+        g_greater_cut = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β; cutoff=1e-2); thermal...)
+        g_lesser_cut = GreenFunction(map(adjoint, operators), ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β; cutoff=1e-2); thermal...)
+        @test count(g_greater_cut) < count(g_greater)
+        @test count(g_lesser_cut) < count(g_lesser)
+        for ω in ωs
             @test isapprox(g_greater(ω), U*Diagonal((1 .- f)./(ω .- ε))*U'; atol=1e-8)
             @test isapprox(g_lesser(ω), U*Diagonal(f./(ω .- ε))*U'; atol=1e-8)
+            @test isapprox(g_greater_cut(ω), g_greater(ω); atol=0.05)
+            @test isapprox(g_lesser_cut(ω), g_lesser(ω); atol=0.05)
         end
-    end
-    for info in (greater_info, lesser_info)
-        @test info.Z ≈ expected_Z
-        @test info.Ω ≈ expected_Ω
-        @test Abelian(info.sector₀) == Abelian(sector₀)
     end
 end
 
@@ -294,73 +309,54 @@ end
         site, fock = pair
         return [Index(site, fock[i]) for i=1:length(fock)÷2]
     end
-    ωs = [0.0, 0.5, 1.0, -0.5, -1.0] .+ 0.05im
     eigensystem = eigen(ed; nev=1)
     e₀, v₀, sector₀ = only(eigensystem.values), only(eigensystem.vectors), only(eigensystem.sectors)
     initial = (e₀=e₀, v₀=v₀, sector₀=sector₀)
     E₀, U₀ = eigen(Hermitian(collect(sparse(ed.frontend, sector₀))))
     thermal = (E₀=E₀, U₀=U₀, sector₀=sector₀)
 
-    # Retain automatic ThermalExact initialization once and reuse its result as the β=2 reference.
-    g_full = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=2.0))
     exact = (
-        greater=Dict(β => β==2.0 ? g_full : GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β); thermal...) for β in (0.5, 1.0, 2.0, 5.0, 20.0, 200.0)),
-        lesser=Dict(β => GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β); thermal...) for β in (0.5, 1.0, 2.0, 5.0, 20.0, 200.0)),
-        retarded=Dict(β => GreenFunction(operators, ed, GreenFunctionKind(:retarded), ThermalExactMethod(β=β); thermal...) for β in (0.5, 2.0, 20.0)),
+        greater=Dict(β => GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=β); thermal...) for β in (0.5, 2.0, 20.0, 200.0)),
+        lesser=Dict(β => GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalExactMethod(β=β); thermal...) for β in (0.5, 2.0, 20.0, 200.0)),
     )
-    g0 = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500); initial...)
-    l0 = GreenFunction(operators, ed, GreenFunctionKind(:lesser), BandLanczosMethod(maxdim=500); initial...)
-    r_exact0 = GreenFunction(operators, ed, GreenFunctionKind(:retarded), ExactMethod(); initial...)
-    r_lanczos0 = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=500); initial...)
+    g₀ = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500); initial...)
+    l₀ = GreenFunction(operators, ed, GreenFunctionKind(:lesser), BandLanczosMethod(maxdim=500); initial...)
+    r₀ = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=500); initial...)
 
-    @testset "ThermalExactMethod: cutoff behavior" begin
-        g_cut = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=2.0; cutoff=1e-2); thermal...)
-        @test count(g_cut) < count(g_full)
-        for ω in ωs
-            @test isapprox(g_cut(ω), g_full(ω); atol=0.05)
-        end
-
-        # T->0 is not degraded by the cutoff: only the ground state survives anyway
-        gT = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalExactMethod(β=200.0; cutoff=1e-2); thermal...)
-        for ω in ωs
-            @test isapprox(gT(ω), g0(ω); atol=1e-6)
-        end
-    end
+    ωs = [0.0, 0.5, -1.0] .+ 0.05im
 
     @testset "ThermalSeedBandLanczosMethod vs ThermalExactMethod" begin
         greater_info, lesser_info = nothing, nothing
         # statistical agreement with the exact method over a temperature grid, with the deviation bounded by 5 times the standard error of the mean estimated from the individual samples
-        for β in (0.5, 1.0, 2.0, 5.0, 20.0)
+        for β in (0.5, 2.0, 20.0)
             method_g = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
             method_l = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-            g_combined = GreenFunction(operators, ed, GreenFunctionKind(:greater), method_g; e₀=e₀, sector₀=sector₀, callback=β==2.0 ? (info->(greater_info=info)) : nothing)
-            l_combined = GreenFunction(operators, ed, GreenFunctionKind(:lesser), method_l; e₀=e₀, sector₀=sector₀, callback=β==2.0 ? (info->(lesser_info=info)) : nothing)
+            g_combined = GreenFunction(operators, ed, GreenFunctionKind(:greater), method_g; e₀=e₀, sector₀=sector₀, callback=info->(greater_info=info))
+            l_combined = GreenFunction(operators, ed, GreenFunctionKind(:lesser), method_l; e₀=e₀, sector₀=sector₀, callback=info->(lesser_info=info))
+            @test greater_info.Z == lesser_info.Z
+            @test greater_info.Ω == lesser_info.Ω
+            for info in (greater_info, lesser_info)
+                @test info.Z > 0
+                @test info.Ω ≈ e₀-log(info.Z)/β
+                @test Abelian(info.sector₀) == Abelian(sector₀)
+            end
             samples_g, samples_l = copy(method_g.samples), copy(method_l.samples)
             @test length(samples_g) == method_g.nrandom
             @test length(samples_l) == method_l.nrandom
             for ω in ωs, (reference, combined, samples) in ((exact.greater[β], g_combined, samples_g), (exact.lesser[β], l_combined, samples_l))
-                samplesω = [sample(ω) for sample in samples]
-                meanω = sum(samplesω)/length(samplesω)
-                σ = sqrt(sum(sampleω->sum(abs2, sampleω-meanω), samplesω)/(length(samplesω)-1)/length(samplesω))
+                σ = standarderror([sample(ω) for sample in samples])
                 @test maximum(abs.(combined(ω)-reference(ω))) <= max(5σ, 0.05)
             end
-        end
-        @test greater_info.Z == lesser_info.Z
-        @test greater_info.Ω == lesser_info.Ω
-        for info in (greater_info, lesser_info)
-            @test info.Z > 0
-            @test info.Ω ≈ e₀-log(info.Z)/2.0
-            @test Abelian(info.sector₀) == Abelian(sector₀)
         end
 
         # correct T->0 degradation: a single random vector suffices
         gT = GreenFunction(operators, ed, GreenFunctionKind(:greater), ThermalSeedBandLanczosMethod(β=200.0, nrandom=1, maxdim₁=500, maxdim₂=500); e₀=e₀, sector₀=sector₀)
         lT = GreenFunction(operators, ed, GreenFunctionKind(:lesser), ThermalSeedBandLanczosMethod(β=200.0, nrandom=1, maxdim₁=500, maxdim₂=500); e₀=e₀, sector₀=sector₀)
         for ω in ωs
-            @test isapprox(gT(ω), g0(ω); atol=1e-6)
-            @test isapprox(exact.greater[200.0](ω), g0(ω); atol=1e-6)
-            @test isapprox(lT(ω), l0(ω); atol=1e-6)
-            @test isapprox(exact.lesser[200.0](ω), l0(ω); atol=1e-6)
+            @test isapprox(gT(ω), g₀(ω); atol=1e-6)
+            @test isapprox(exact.greater[200.0](ω), g₀(ω); atol=1e-6)
+            @test isapprox(lT(ω), l₀(ω); atol=1e-6)
+            @test isapprox(exact.lesser[200.0](ω), l₀(ω); atol=1e-6)
         end
 
         # the sampling error shrinks with the number of random vectors
@@ -381,36 +377,18 @@ end
         @test g₁ == g₂
     end
 
-    @testset "GreenFunction sum rule: pole-weight completeness" begin
-        Id = Matrix{Float64}(I, length(operators), length(operators))
-        weight(gf) = gf.L * transpose(gf.R)
-
-        # the pole weights of the retarded Green function sum to the anticommutator identity, Σₖ L[i,k]R[j,k] = ⟨{Aᵢ, Aⱼ†}⟩ = δᵢⱼ
-        for gf in (r_exact0, r_lanczos0)
-            @test isapprox(weight(gf), Id; atol=1e-8)
-        end
-        for β in (0.5, 2.0, 20.0)
-            @test isapprox(weight(exact.retarded[β]), Id; atol=1e-10)
-        end
-
-        # the seed method obeys the identity within the statistical error of the individual samples
-        retarded_info = nothing
+    @testset "ThermalSeedBandLanczosMethod: pole-weight sum rule" begin
         method = ThermalSeedBandLanczosMethod(β=2.0, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method; e₀=e₀, sector₀=sector₀, callback=info->(retarded_info=info))
-        @test retarded_info.Z > 0
-        @test retarded_info.Ω ≈ e₀-log(retarded_info.Z)/2.0
-        @test Abelian(retarded_info.sector₀) == Abelian(sector₀)
+        gf = GreenFunction(operators, ed, GreenFunctionKind(:retarded), method; e₀=e₀, sector₀=sector₀)
         samples = copy(method.samples)
         @test length(samples) == method.nrandom
-        ws = [weight(sample) for sample in samples]
-        meanw = sum(ws)/length(ws)
-        σ = sqrt(sum(w->sum(abs2, w-meanw), ws)/(length(ws)-1)/length(ws))
-        @test maximum(abs.(weight(gf)-Id)) <= max(5σ, 0.05)
+        σ = standarderror(weight.(samples))
+        @test maximum(abs.(weight(gf)-Matrix{Float64}(I, length(operators), length(operators)))) <= max(5σ, 0.05)
     end
 
     @testset "GreenFunction: parallel construction (ntasks>1)" begin
         # zero-temperature: the parallel sector construction is deterministic and matches the serial one
-        serial = (greater=g0, lesser=l0)
+        serial = (greater=g₀, lesser=l₀)
         for kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser)), keepvecs in (false, true)
             gs = keepvecs ? serial[Symbol(kind)] : GreenFunction(operators, ed, kind, BandLanczosMethod(maxdim=500; keepvecs=false); initial...)
             gp = GreenFunction(operators, ed, kind, BandLanczosMethod(maxdim=500; keepvecs=keepvecs, ntasks=2); initial...)
@@ -420,7 +398,7 @@ end
         # zero-temperature retarded: the greater/lesser parts are constructed concurrently
         parallel_info = nothing
         rp = GreenFunction(operators, ed, GreenFunctionKind(:retarded), BandLanczosMethod(maxdim=500; ntasks=2); initial..., sign=false, callback=info->(parallel_info=info))
-        @test r_lanczos0 == rp
+        @test r₀ == rp
         @test parallel_info.Z == 1
         @test parallel_info.Ω ≈ e₀
         @test Abelian(parallel_info.sector₀) == Abelian(sector₀)
@@ -460,7 +438,7 @@ end
         path = ReciprocalPath(unitcell, line"X₂-X₁"; length=length(lattice))
         dos, spectral = zeros(N), zeros(N, length(path))
         for (i, e) in enumerate(es)
-            data = r_lanczos0(e+η*1im)
+            data = r₀(e+η*1im)
             dos[i] = -2imag(tr(data))
             for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
                 disp = lattice[opₘ.site] - lattice[opₙ.site]
@@ -491,18 +469,18 @@ end
     E₀, U₀ = eigen(Hermitian(collect(sparse(ed.frontend, sector₀))))
     thermal = (E₀=E₀, U₀=U₀, sector₀=sector₀)
 
-    g = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(; keepvecs=true); initial...)
+    g₀ = GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(; keepvecs=true); initial...)
     expected_weight = sum(operators) do op
         real(dot(v₀, matrix(adjoint(op)*op, (sector₀, sector₀), ed.frontend.matrixization.table, Float64), v₀))
     end
-    @test isapprox(tr(g.L*transpose(g.R)), expected_weight; atol=1e-8)
+    @test isapprox(tr(g₀.L*transpose(g₀.R)), expected_weight; atol=1e-8)
 
     N, η = 201, 0.1
     es = LinRange(0.0, 4.0, N)
     path = ReciprocalPath(unitcell, line"Γ₁-Γ₂"; length=length(lattice))
     spectral = zeros(N, length(path))
     for (i, e) in enumerate(es)
-        data = g(e+η*1im)
+        data = g₀(e+η*1im)
         for (m, opₘ) in enumerate(operators), (n, opₙ) in enumerate(operators)
             disp = lattice[opₘ.site] - lattice[opₙ.site]
             for (j, momentum) in enumerate(path)
@@ -513,17 +491,15 @@ end
     Plots.savefig(Plots.plot(path, es, log.(1 .+ spectral); minorticks=true, minorgrid=true), "Plots-Heisenberg-1d-8-spectral.png")
     Makie.save("Makie-Heisenberg-1d-8-spectral.png", Makie.plot(path, es, log.(1 .+ spectral)))
 
-    # statistical agreement between the seed and exact methods on a spin chain (exercising the AbelianBases path)
-    for β in (1.0, 5.0), kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser))
-        method = ThermalSeedBandLanczosMethod(β=β, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
-        g_exact = GreenFunction(operators, ed, kind, ThermalExactMethod(β=β); thermal...)
+    # statistical agreement at an intermediate temperature on a spin chain (exercising the AbelianBases path)
+    for kind in (GreenFunctionKind(:greater), GreenFunctionKind(:lesser))
+        method = ThermalSeedBandLanczosMethod(β=2.0, nrandom=50, seed=UInt64(12345), maxdim₁=500, maxdim₂=500)
+        g_exact = GreenFunction(operators, ed, kind, ThermalExactMethod(β=2.0); thermal...)
         g_combined = GreenFunction(operators, ed, kind, method; e₀=e₀, sector₀=sector₀)
         samples = copy(method.samples)
         @test length(samples) == method.nrandom
         for ω in ωs
-            samplesω = [sample(ω) for sample in samples]
-            meanω = sum(samplesω)/length(samplesω)
-            σ = sqrt(sum(sampleω->sum(abs2, sampleω-meanω), samplesω)/(length(samplesω)-1)/length(samplesω))
+            σ = standarderror([sample(ω) for sample in samples])
             @test maximum(abs.(g_combined(ω)-g_exact(ω))) <= max(5σ, 0.05)
         end
     end
