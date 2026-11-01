@@ -4,51 +4,54 @@ using QuantumLattices: σ⁺, σ⁻, σᶻ, 𝕔, 𝕔⁺, 𝕔⁺𝕔, bonds, e
 import CairoMakie as Makie
 import Plots
 
-@testset "SpinlessSquareStaticChargeStructFactor" begin
-    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
-    lattice = Lattice(unitcell, (4, 4), ('P', 'P'))
-    hilbert = Hilbert(Fock{:f}(1, 1), length(lattice))
-    ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
-    eigensystem = ed(:eigen, EDEigen(); delay=true)
-    nᵢ = [𝕔⁺(i, 1, 0)*𝕔(i, 1, 0) for i = 1:length(lattice)]
-    expectation = ed(Symbol("Spinless-Square-4x4-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem)
-    nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
-    bz = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(unitcell, 100)), eigensystem)
-    Plots.savefig(Plots.plot(bz), "Plots-Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png")
-    Makie.save("Makie-Spinless-Square-4x4-StaticChargeStructureFactor-BZ.png", Makie.plot(bz))
-    path = ed(Symbol("Spinless-Square-4x4-StaticChargeStructureFactor-Path"), StaticTwoPointCorrelator(nᵢnⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem)
-    Plots.savefig(Plots.plot(path), "Plots-Spinless-Square-4x4-StaticChargeStructureFactor-Path.png")
-    Makie.save("Makie-Spinless-Square-4x4-StaticChargeStructureFactor-Path.png", Makie.plot(path))
-end
-
-@testset "HubbardSquareStaticSpinStructureFactor" begin
+@testset "Square lattice static structure factors" begin
     unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
     lattice = Lattice(unitcell, (2, 2), ('P', 'P'))
-    hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
-    ed = Algorithm(Symbol("Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
-    eigensystem = ed(:eigen, EDEigen(); delay=true)
-    SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ⁺)*𝕔⁺𝕔(:, :, σ⁻) + 1//2*𝕔⁺𝕔(:, :, σ⁻)*𝕔⁺𝕔(:, :, σ⁺) + 𝕔⁺𝕔(:, :, σᶻ)*𝕔⁺𝕔(:, :, σᶻ)), bond, hilbert) for bond in bonds(lattice, :)]
-    bz = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 100)), eigensystem)
-    Plots.savefig(Plots.plot(bz), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
-    Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png", Makie.plot(bz))
-    path = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem)
-    Plots.savefig(Plots.plot(path), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
-    Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png", Makie.plot(path))
-end
 
-@testset "HeisenbergSquareStaticSpinStructureFactor" begin
-    unitcell = Lattice([0.0, 0.0]; vectors=[[1.0, 0.0], [0.0, 1.0]])
-    lattice = Lattice(unitcell, (4, 4), ('P', 'P'))
-    hilbert = Hilbert(Spin{1//2}(), length(lattice))
-    ed = Algorithm(Symbol("Square-4x4"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
-    eigensystem = ed(:eigen, EDEigen(); delay=true)
-    SᵢSⱼ = [expand(Heisenberg(:J, 1.0, :), bond, hilbert) for bond in bonds(lattice, :)]
-    bz = ed(Symbol("Heisenberg-Square-4x4-SpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 100)), eigensystem)
-    Plots.savefig(Plots.plot(bz), "Plots-Heisenberg-Square-4x4-SpinStructureFactor-BZ.png")
-    Makie.save("Makie-Heisenberg-Square-4x4-SpinStructureFactor-BZ.png", Makie.plot(bz))
-    path = ed(Symbol("Heisenberg-Square-4x4-SpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ")), eigensystem)
-    Plots.savefig(Plots.plot(path), "Plots-Heisenberg-Square-4x4-SpinStructureFactor-Path.png")
-    Makie.save("Makie-Heisenberg-Square-4x4-SpinStructureFactor-Path.png", Makie.plot(path))
+    @testset "SpinlessSquareStaticChargeStructFactor" begin
+        hilbert = Hilbert(Fock{:f}(1, 1), length(lattice))
+        ed = Algorithm(Symbol("Spinless-Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Coulomb(:V, 2.0, 1)), ℕ(length(lattice)÷2)))
+        eigensystem = ed(:eigen, EDEigen(); delay=true)
+        nᵢ = [𝕔⁺(i, 1, 0)*𝕔(i, 1, 0) for i = 1:length(lattice)]
+        expectation = ed(Symbol("Spinless-Square-2x2-GroundStateExpectation"), GroundStateExpectation(nᵢ), eigensystem)
+        @test sum(expectation.data.values) ≈ length(lattice)÷2
+        nᵢnⱼ = [(nᵢ[i]-expectation.data.values[i])*((nᵢ[j]-expectation.data.values[j])) for i=1:length(lattice), j=1:length(lattice)]
+        bz = ed(Symbol("Spinless-Square-2x2-StaticChargeStructureFactor-BZ"), StaticTwoPointCorrelator(nᵢnⱼ, BrillouinZone(unitcell, 21)), eigensystem)
+        Plots.savefig(Plots.plot(bz), "Plots-Spinless-Square-2x2-StaticChargeStructureFactor-BZ.png")
+        Makie.save("Makie-Spinless-Square-2x2-StaticChargeStructureFactor-BZ.png", Makie.plot(bz))
+        path = ed(Symbol("Spinless-Square-2x2-StaticChargeStructureFactor-Path"), StaticTwoPointCorrelator(nᵢnⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ"; length=41)), eigensystem)
+        @test isapprox(path.data.values[1], 0.0; atol=1e-10)
+        Plots.savefig(Plots.plot(path), "Plots-Spinless-Square-2x2-StaticChargeStructureFactor-Path.png")
+        Makie.save("Makie-Spinless-Square-2x2-StaticChargeStructureFactor-Path.png", Makie.plot(path))
+    end
+
+    @testset "HubbardSquareStaticSpinStructureFactor" begin
+        hilbert = Hilbert(Fock{:f}(1, 2), length(lattice))
+        ed = Algorithm(Symbol("Hubbard-Square-2x2"), ED(lattice, hilbert, (Hopping(:t, -1.0, 1), Hubbard(:U, 2.0)), ℕ(length(lattice)) ⊠ 𝕊ᶻ(0)))
+        eigensystem = ed(:eigen, EDEigen(); delay=true)
+        SᵢSⱼ = [expand(Coulomb(:V, 1//4, :, 1//2*𝕔⁺𝕔(:, :, σ⁺)*𝕔⁺𝕔(:, :, σ⁻) + 1//2*𝕔⁺𝕔(:, :, σ⁻)*𝕔⁺𝕔(:, :, σ⁺) + 𝕔⁺𝕔(:, :, σᶻ)*𝕔⁺𝕔(:, :, σᶻ)), bond, hilbert) for bond in bonds(lattice, :)]
+        bz = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 21)), eigensystem)
+        Plots.savefig(Plots.plot(bz), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png")
+        Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-BZ.png", Makie.plot(bz))
+        path = ed(Symbol("Hubbard-Square-2x2-StaticSpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ"; length=41)), eigensystem)
+        @test isapprox(path.data.values[1], 0.0; atol=1e-8)
+        Plots.savefig(Plots.plot(path), "Plots-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png")
+        Makie.save("Makie-Hubbard-Square-2x2-StaticSpinStructureFactor-Path.png", Makie.plot(path))
+    end
+
+    @testset "HeisenbergSquareStaticSpinStructureFactor" begin
+        hilbert = Hilbert(Spin{1//2}(), length(lattice))
+        ed = Algorithm(Symbol("Heisenberg-Square-2x2"), ED(lattice, hilbert, Heisenberg(:J, 1.0, 1), 𝕊ᶻ(0)))
+        eigensystem = ed(:eigen, EDEigen(); delay=true)
+        SᵢSⱼ = [expand(Heisenberg(:J, 1.0, :), bond, hilbert) for bond in bonds(lattice, :)]
+        bz = ed(Symbol("Heisenberg-Square-2x2-SpinStructureFactor-BZ"), StaticTwoPointCorrelator(SᵢSⱼ, BrillouinZone(unitcell, 21)), eigensystem)
+        Plots.savefig(Plots.plot(bz), "Plots-Heisenberg-Square-2x2-SpinStructureFactor-BZ.png")
+        Makie.save("Makie-Heisenberg-Square-2x2-SpinStructureFactor-BZ.png", Makie.plot(bz))
+        path = ed(Symbol("Heisenberg-Square-2x2-SpinStructureFactor-Path"), StaticTwoPointCorrelator(SᵢSⱼ, ReciprocalPath(unitcell, rectangle"Γ-X-M-Γ"; length=41)), eigensystem)
+        @test isapprox(path.data.values[1], 0.0; atol=1e-8)
+        Plots.savefig(Plots.plot(path), "Plots-Heisenberg-Square-2x2-StaticSpinStructureFactor-Path.png")
+        Makie.save("Makie-Heisenberg-Square-2x2-StaticSpinStructureFactor-Path.png", Makie.plot(path))
+    end
 end
 
 @testset "HeisenbergHexagonStaticSpinStructureFactor" begin
@@ -91,21 +94,30 @@ end
     coherent = SpinCoherentState(Dict(i=>[0.0, 0.0, 1.0] for i=1:length(lattice)))
     ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, -1.0, 1), Zeeman(:h, Complex(-0.2), (pi/2, pi); unit=:radian))))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-FM-(90, 180)"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)
+    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-FM-(90, 180)"), SpinCoherentStateProjection(coherent, 41, 41), eigensystem)
+    @test all(x->0.0<=x<=1.0+1e-12, projection.data.values)
+    peak = argmax(projection.data.values)
+    @test projection.data.polars[peak[2]] ≈ pi/2
+    @test projection.data.azimuths[peak[1]] ≈ pi
     Plots.savefig(Plots.plot(projection), "Plots-Hexagon-2x2-SpinCoherentState-FM-(90, 180).png")
     Makie.save("Makie-Hexagon-2x2-SpinCoherentState-FM-(90, 180).png", Makie.plot(projection))
 
     coherent = SpinCoherentState(Dict(i=>iseven(i) ? [0.0, 0.0, 1.0] : [0.0, 0.0, -1.0] for i=1:length(lattice)))
     ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, 1.0, 1), Zeeman(:h, Complex(-0.2), 'z'; amplitude=bond->iseven(bond[1].site) ? 1 : -1)), 𝕊ᶻ(0)))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-z"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)
+    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-z"), SpinCoherentStateProjection(coherent, 41, 41), eigensystem)
+    @test all(x->0.0<=x<=1.0+1e-12, projection.data.values)
+    reference = coherent(only(eigensystem.data.sectors), ed.frontend.matrixization.table)
+    @test projection.data.values[1, 1] ≈ abs2(reference' * only(eigensystem.data.vectors))
     Plots.savefig(Plots.plot(projection), "Plots-Hexagon-2x2-SpinCoherentState-AFM-z.png")
     Makie.save("Makie-Hexagon-2x2-SpinCoherentState-AFM-z.png", Makie.plot(projection))
 
-    coherent = SpinCoherentState(Dict(i=>iseven(i) ? [0.0, 0.0, 1.0] : [0.0, 0.0, -1.0] for i=1:length(lattice)))
     ed = Algorithm(Symbol("Hexagon-2x2"), ED(lattice, hilbert, (Heisenberg(:J, 1.0, 1), Zeeman(:h, Complex(-0.2), 'x'; amplitude=bond->iseven(bond[1].site) ? 1 : -1))))
     eigensystem = ed(:eigen, EDEigen(); delay=true)
-    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-x"), SpinCoherentStateProjection(coherent, 100, 100), eigensystem)
+    projection = ed(Symbol("Hexagon-2x2-SpinCoherentState-AFM-x"), SpinCoherentStateProjection(coherent, 41, 41), eigensystem)
+    @test all(x->0.0<=x<=1.0+1e-12, projection.data.values)
+    reference = coherent(only(eigensystem.data.sectors), ed.frontend.matrixization.table)
+    @test projection.data.values[1, 1] ≈ abs2(reference' * only(eigensystem.data.vectors))
     Plots.savefig(Plots.plot(projection), "Plots-Hexagon-2x2-SpinCoherentState-AFM-x.png")
     Makie.save("Makie-Hexagon-2x2-SpinCoherentState-AFM-x.png", Makie.plot(projection))
 end
