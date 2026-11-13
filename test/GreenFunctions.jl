@@ -4,6 +4,7 @@ using KrylovKit: ModifiedGramSchmidt, ModifiedGramSchmidt2
 using LinearAlgebra: Diagonal, Hermitian, I, dot, inv, norm, tr
 using QuantumLattices
 using TightBindingApproximation
+using TimerOutputs: TimerOutput
 import CairoMakie as Makie
 import Plots
 
@@ -430,6 +431,14 @@ end
             @test info.Ω ≈ e₀-log(info.Z)/2.0
             @test Abelian(info.sector₀) == Abelian(sector₀)
         end
+
+        # an enabled timer explicitly passed to a parallel construction is ignored (with a warning) since TimerOutput is not thread-safe
+        @test_logs (:warn, r"not thread-safe") match_mode=:any GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500; ntasks=2); initial..., timer=edtimer)
+        @test g₀ == GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500; ntasks=2); initial..., timer=TimerOutput())
+        @test_logs (:warn, r"not thread-safe") match_mode=:any GreenFunction(operators, ed, GreenFunctionKind(:retarded), method₂; e₀=e₀, sector₀=sector₀, sign=false, timer=TimerOutput())
+        @test rs == GreenFunction(operators, ed, GreenFunctionKind(:retarded), method₂; e₀=e₀, sector₀=sector₀, sign=false, timer=TimerOutput())
+        @test g₀ == GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500); initial..., timer=nothing)
+        @test g₀ == GreenFunction(operators, ed, GreenFunctionKind(:greater), BandLanczosMethod(maxdim=500, ntasks=2); initial..., timer=nothing)
     end
 
     @testset "GreenFunction Hubbard plots" begin

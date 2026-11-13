@@ -209,6 +209,18 @@ Construct a `GreenFunction` from the single amplitude matrix `Q`, equivalent to 
 """
 @inline GreenFunction(Q::AbstractMatrix{<:Number}, E::AbstractVector{<:Number}) = GreenFunction(Q, conj(Q), E)
 
+# TimerOutput is not thread-safe, so an enabled timer can never serve a parallel construction: replace it with the disabled `notimer` (with a warning), while serial constructions keep their timer (default `edtimer`) for timing.
+function _parallelsafetimer_(timer::Union{TimerOutput, Nothing}, method::GreenFunctionMethod)
+    if ntasks(method)>1
+        if !isnothing(timer) && timer !== notimer
+            @warn "an enabled TimerOutput is ignored by parallel Green function constructions (ntasks(method)>1) since TimerOutput is not thread-safe; use the serial construction (ntasks=1) for timing" maxlog=1
+        end
+        return notimer
+    else
+        return timer
+    end
+end
+
 """
     GreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::GreenFunctionKind, method::GreenFunctionMethod=BandLanczosMethod(); kwargs...)
 
@@ -216,10 +228,10 @@ Construct a `GreenFunction` from a vector of quantum operators, an exact diagona
 
 The keyword arguments are passed to the underlying constructor.
 
-The default timer is `ed.timer` for the serial construction (`ntasks(method)==1`) and the disabled `notimer` for the parallel one.
+The default timer is `ed.timer` for the serial construction (`ntasks(method)==1`) and the disabled `notimer` for the parallel one. When `ntasks(method)>1`, an explicitly supplied enabled `timer` is replaced by `notimer` with a warning because `TimerOutput` is not thread-safe; use a serial construction to collect timings.
 """
 @inline function GreenFunction(operators::AbstractVector{<:QuantumOperator}, ed::Algorithm{<:ED}, kind::GreenFunctionKind, method::GreenFunctionMethod=BandLanczosMethod(); kwargs...)
-    timer = get(kwargs, :timer, ntasks(method)>1 ? notimer : ed.timer)
+    timer = _parallelsafetimer_(get(kwargs, :timer, ntasks(method)>1 ? notimer : ed.timer), method)
     return GreenFunction(operators, ed.frontend, kind, method; timer=timer, kwargs...)
 end
 
@@ -333,7 +345,7 @@ Used internally to split the task budget among the concurrently constructed part
 
 Construct a zero-temperature `GreenFunction`, by full diagonalization of each target sector for `ExactMethod` and by the band Lanczos method for `BandLanczosMethod`.
 
-The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), with results identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the per-sector progress messages may interleave.
+The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), with results identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the per-sector progress messages may interleave. When `ntasks(method)>1`, an explicitly supplied enabled `timer` is replaced by `notimer` with a warning; use a serial construction to collect timings.
 
 When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. At zero temperature, `Ω==e₀` and `Z==1`.
 """
@@ -341,7 +353,7 @@ function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::Union{ExactMethod, BandLanczosMethod}=BandLanczosMethod();
     e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
-    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
+    timer = _parallelsafetimer_(something(timer, ntasks(method)>1 ? notimer : edtimer), method)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
@@ -515,7 +527,7 @@ end
 
 Construct the zero-temperature retarded Green function as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which are constructed by the zero-temperature `GreenFunction` constructor with the same `method` ([`BandLanczosMethod`](@ref) or [`ExactMethod`](@ref)) and share the same ground state.
 
-With `ntasks(method)>1`, the greater and lesser parts are constructed concurrently, each distributing its target-sector computations over up to `max(1, ntasks(method)÷2)` tasks; the results are identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe).
+With `ntasks(method)>1`, the greater and lesser parts are constructed concurrently, each distributing its target-sector computations over up to `max(1, ntasks(method)÷2)` tasks; the results are identical to the serial construction. Note that the peak memory usage grows with the number of concurrent tasks, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe). An explicitly supplied enabled `timer` is also replaced by `notimer` with a warning; use a serial construction to collect timings.
 
 When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. At zero temperature, `Ω==e₀` and `Z==1`.
 """
@@ -523,7 +535,7 @@ function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::Union{BandLanczosMethod, ExactMethod}=BandLanczosMethod();
     sign::Bool=false, e₀::Union{Real, Nothing}=nothing, v₀::Union{AbstractVector{<:Number}, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
-    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
+    timer = _parallelsafetimer_(something(timer, ntasks(method)>1 ? notimer : edtimer), method)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, v₀, sector₀))
@@ -752,7 +764,7 @@ The Green functions of the individual random vectors are stored in `method.sampl
 
 - `e₀`, `sector₀`: the ground-state energy and sector; recomputed each call when absent, by a Lanczos eigen solver with a random initial vector (see [`ThermalSeedBandLanczosMethod`](@ref) for the reproducibility implications).
 
-The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), and the sector computations within each sample over up to `max(1, ntasks(method)÷min(ntasks(method), method.nrandom))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
+The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect), and the sector computations within each sample over up to `max(1, ntasks(method)÷min(ntasks(method), method.nrandom))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave. When `ntasks(method)>1`, an explicitly supplied enabled `timer` is replaced by `notimer` with a warning; use a serial construction to collect timings.
 
 When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is estimated from the same random samples.
 """
@@ -760,7 +772,7 @@ function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod;
     e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing, timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
-    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
+    timer = _parallelsafetimer_(something(timer, ntasks(method)>1 ? notimer : edtimer), method)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
@@ -898,10 +910,10 @@ Construct the Green function for a **single** random vector (carried by `sample`
 
 The operators are grouped by the sectors their adjoints map to from `sector₀` (see [`sectorgroups`](@ref)), and the Hamiltonian and operator matrices of each sector are constructed on the fly inside the loop (cheaply, via the disk caches). The constructed `GreenFunction` is **unnormalized** and serves as a data container: divide its `L` by `sample.z` for the Green function of the individual sample, or accumulate the poles over the samples and divide by the total partition function for the combined Green function.
 
-The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one.
+The independent target-sector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one. When `ntasks(method)>1`, an explicitly supplied enabled `timer` is replaced by `notimer` with a warning because `TimerOutput` is not thread-safe; use a serial construction to collect timings.
 """
 function GreenFunction(sample::ThermalSample, operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreaterOrLesserKind, method::ThermalSeedBandLanczosMethod; sector₀::Sector, timer::Union{TimerOutput, Nothing}=nothing)
-    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
+    timer = _parallelsafetimer_(something(timer, ntasks(method)>1 ? notimer : edtimer), method)
     T = promote_type(scalartype(operators), scalartype(ed))
     ops′ = map(adjoint, operators)
     groups = collect(pairs(sectorgroups(operators, ed, sector₀)))
@@ -1004,7 +1016,7 @@ end
 
 Construct the finite-temperature retarded Green function at inverse temperature `method.β` by the thermally-weighted seed band Lanczos method, as the single merged pole sum of the greater and lesser parts (via the `+`/`-` algebra of `GreenFunction`), which share the same per-sample data of the first Lanczos runs: each random vector is used for both parts (exactly paired), and the merged per-sample Green functions are stored in `method.samples`.
 
-The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); within each sample, the greater and lesser parts are constructed concurrently, each distributing its sector computations over up to `max(1, ntasks(method)÷(2*min(ntasks(method), method.nrandom)))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave.
+The independent random-vector computations are distributed over `ntasks(method)` parallel tasks (requires Julia to be started with multiple threads, e.g. `julia -t auto`, to take effect); within each sample, the greater and lesser parts are constructed concurrently, each distributing its sector computations over up to `max(1, ntasks(method)÷(2*min(ntasks(method), method.nrandom)))` nested tasks. The random vectors are drawn from per-sample generators derived from `method.seed` (see [`samplerngs`](@ref)), so the results are reproducible for a nonzero seed and identical for the serial and all parallel constructions. Note that the peak memory usage grows with the number of concurrent samples, and that the default `timer` is `edtimer` for the serial construction and the disabled `notimer` for the parallel one (`TimerOutput` is not thread-safe), in which case the progress messages may interleave. When `ntasks(method)>1`, an explicitly supplied enabled `timer` is replaced by `notimer` with a warning; use a serial construction to collect timings.
 
 When supplied, `callback` is invoked once with a [`GreenFunctionInfo`](@ref) after construction. Its `Ω` is estimated from the same random samples.
 """
@@ -1012,7 +1024,7 @@ function GreenFunction(
     operators::AbstractVector{<:QuantumOperator}, ed::ED, kind::GreenFunctionKind{:retarded}, method::ThermalSeedBandLanczosMethod;
     sign::Bool=false, e₀::Union{Real, Nothing}=nothing, sector₀::Union{Sector, Nothing}=nothing, callback=nothing,timer::Union{TimerOutput, Nothing}=nothing, kwargs...
 )
-    timer = something(timer, ntasks(method)>1 ? notimer : edtimer)
+    timer = _parallelsafetimer_(something(timer, ntasks(method)>1 ? notimer : edtimer), method)
     @timeit timer string(kind) begin
         @info "Green Function ($(string(kind)), $(str(method)))"
         if any(isnothing, (e₀, sector₀))
